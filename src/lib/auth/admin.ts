@@ -5,21 +5,22 @@ import crypto from 'crypto';
  * Never exposes credentials to client bundles.
  */
 export function verifyAdminCredentials(username: string, password: string): boolean {
-  const expectedUsername = process.env.ADMIN_USERNAME || '';
-  const expectedPassword = process.env.ADMIN_PASSWORD || '';
+  const expectedUsername = (process.env.ADMIN_USERNAME || '').trim();
+  const expectedPassword = (process.env.ADMIN_PASSWORD || '').trim();
 
   if (!expectedUsername || !expectedPassword) {
-    console.error('Missing ADMIN_USERNAME or ADMIN_PASSWORD in environment variables.');
+    console.error('Missing ADMIN_USERNAME or ADMIN_PASSWORD in environment variables on Vercel.');
     return false;
   }
 
-  // Create buffers
-  const usernameBuffer = Buffer.from(username.trim());
-  const expectedUsernameBuffer = Buffer.from(expectedUsername.trim());
-  const passwordBuffer = Buffer.from(password);
+  const cleanInputUsername = username.trim();
+  const cleanInputPassword = password.trim();
+
+  const usernameBuffer = Buffer.from(cleanInputUsername);
+  const expectedUsernameBuffer = Buffer.from(expectedUsername);
+  const passwordBuffer = Buffer.from(cleanInputPassword);
   const expectedPasswordBuffer = Buffer.from(expectedPassword);
 
-  // Timing safe equal requires equal buffer lengths
   const isUsernameMatch =
     usernameBuffer.length === expectedUsernameBuffer.length &&
     crypto.timingSafeEqual(usernameBuffer, expectedUsernameBuffer);
