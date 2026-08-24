@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
+@theme {
+  --color-gold: #B8956A;
+  --color-gold-hover: #A68257;
+  --color-gold-dark: #9C7554;
+  --color-gold-light: #F6F2EB;
+  --color-gold-tint: #E8DFD4;
+  --color-gold-muted: #DED5CB;
+  --color-dark-text: #1F1F1F;
+  --color-dark-surface: #1F1F1F;
+  --color-dark-card: #141414;
+  --color-muted-text: #7D7C7C;
+  --color-border-light: #EAE3DA;
+  --font-alexandria: var(--font-alexandria), 'Alexandria', system-ui, sans-serif;
+  --font-marhey: var(--font-marhey), 'Marhey', cursive, sans-serif;
+  --font-sans: var(--font-alexandria), 'Alexandria', system-ui, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #FAF8F5;
+  --foreground: #1F1F1F;
+  --btn: #B8956A;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.font-marhey,
+.font-marhey * {
+  font-family: var(--font-marhey), 'Marhey', cursive, sans-serif !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.font-alexandria {
+  font-family: var(--font-alexandria), 'Alexandria', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  font-family: var(--font-alexandria), 'Alexandria', system-ui, sans-serif;
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF8F5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D8D1C7;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B8956A;
 }

@@ -1,0 +1,12 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" rx="24" fill="#F2EEE8"/>
+  <rect x="120" y="110" width="160" height="180" rx="20" stroke="#DCD4CA" stroke-width="4" fill="#FFFFFF"/>
+  <!-- Device Screen & Camera -->
+  <circle cx="200" cy="132" r="4" fill="#B8956A"/>
+  <rect x="135" y="146" width="130" height="114" rx="10" fill="#F6F2EB"/>
+  <!-- Graphic inside screen -->
+  <path d="M155 240L180 205L200 225L225 185L245 240H155Z" fill="#DCD4CA"/>
+  <circle cx="170" cy="180" r="10" fill="#B8956A" opacity="0.6"/>
+  <!-- Home Indicator -->
+  <rect x="180" y="272" width="40" height="4" rx="2" fill="#DCD4CA"/>
+</svg>
