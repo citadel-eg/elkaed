@@ -2,18 +2,19 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ProductDetailsView } from '@/components/store/ProductDetailsView';
 import type { Product } from '@/types/product';
+import type { Metadata } from 'next';
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: ProductDetailPageProps) {
+export async function generateMetadata({ params }: ProductDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-  let query = supabase.from('products').select('name, description').eq('is_active', true);
+  let query = supabase.from('products').select('*').eq('is_active', true);
   if (isUUID) {
     query = query.eq('id', id);
   } else {
@@ -26,9 +27,32 @@ export async function generateMetadata({ params }: ProductDetailPageProps) {
     return { title: 'المنتج غير متوفر | القائد للتقنية' };
   }
 
+  const title = `${product.name} | متجر القائد للتقنية`;
+  const description =
+    product.description ||
+    `اشتري ${product.name} بأفضل سعر من متجر القائد للتقنية مع ضمان معتمد وخدمة توصيل سريعة.`;
+  const imageUrl = product.image_url || '/images/product-placeholder.svg';
+
   return {
-    title: `${product.name} | القائد للتقنية`,
-    description: product.description || undefined,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [
+        {
+          url: imageUrl,
+          alt: product.name,
+        },
+      ],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
   };
 }
 
@@ -53,7 +77,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
   const typedProduct = product as Product;
 
-  // 1. Fetch Suggested Accessories (accessories, audio, chargers, cables, cases, powerbanks)
+  // 1. Fetch Suggested Accessories
   const { data: accessoriesData } = await supabase
     .from('products')
     .select('*')
@@ -62,7 +86,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     .in('category', ['accessories', 'audio', 'chargers', 'cables', 'cases', 'powerbanks'])
     .limit(3);
 
-  // 2. Fetch Related Products (same brand or same category or newest)
+  // 2. Fetch Related Products
   let relatedQuery = supabase
     .from('products')
     .select('*')
@@ -83,11 +107,43 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     ? (relatedData as Product[])
     : [];
 
+  // Structured Data Schema for Google Rich Snippets
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: typedProduct.name,
+    image: typedProduct.image_url ? [typedProduct.image_url] : [],
+    description: typedProduct.description || `${typedProduct.name} من متجر القائد للتقنية`,
+    brand: {
+      '@type': 'Brand',
+      name: typedProduct.brand || 'القائد للتقنية',
+    },
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'EGP',
+      price: typedProduct.price,
+      availability:
+        typedProduct.stock > 0
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/OutOfStock',
+      seller: {
+        '@type': 'Organization',
+        name: 'متجر القائد للتقنية',
+      },
+    },
+  };
+
   return (
-    <ProductDetailsView
-      product={typedProduct}
-      suggestedAccessories={suggestedAccessories}
-      relatedProducts={relatedProducts}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <ProductDetailsView
+        product={typedProduct}
+        suggestedAccessories={suggestedAccessories}
+        relatedProducts={relatedProducts}
+      />
+    </>
   );
 }

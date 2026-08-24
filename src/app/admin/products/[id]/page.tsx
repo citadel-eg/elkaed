@@ -8,10 +8,9 @@ interface EditProductPageProps {
   params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: EditProductPageProps) {
-  const { id } = await params;
+export async function generateMetadata() {
   return {
-    title: `Edit Product ${id} - Admin Dashboard`,
+    title: 'تعديل المنتج | لوحة تحكم القائد',
   };
 }
 
@@ -29,36 +28,40 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
     notFound();
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
-        <Link href="/admin/products" className="hover:text-zinc-800 dark:hover:text-zinc-200">
-          Products
-        </Link>
-        <span>/</span>
-        <span className="text-zinc-800 dark:text-zinc-200 font-medium">Edit Product</span>
-      </div>
+  const typedProduct = product as Product;
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            Edit: {product.name}
-          </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-0.5">
-            Update product info, pricing, stock, or replace the product image
-          </p>
+  return (
+    <div className="space-y-6 text-start" dir="rtl">
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-alexandria text-muted-text">
+          <Link href="/admin/products" className="hover:text-gold transition-colors">
+            المنتجات
+          </Link>
+          <span>/</span>
+          <span className="text-[#1F1F1F] font-bold">تعديل: {typedProduct.name}</span>
         </div>
 
         <Link
-          href={`/products/${product.id}`}
+          href={`/products/${typedProduct.slug || typedProduct.id}`}
           target="_blank"
-          className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline"
+          className="font-alexandria text-xs font-medium text-gold hover:underline inline-flex items-center gap-1"
         >
-          View live on store ↗
+          <span>عرض في المتجر</span>
+          <span>↗</span>
         </Link>
       </div>
 
-      <ProductForm product={product as Product} isEditing={true} />
+      <div>
+        <h1 className="font-marhey font-bold text-2xl sm:text-3xl text-[#1F1F1F]">
+          تعديل المنتج: {typedProduct.name}
+        </h1>
+        <p className="font-alexandria text-xs text-muted-text mt-1">
+          تعديل الأسعار، المخزون، الألوان، المواصفات، أو استبدال صور المنتج
+        </p>
+      </div>
+
+      <ProductForm product={typedProduct} isEditing={true} />
     </div>
   );
 }

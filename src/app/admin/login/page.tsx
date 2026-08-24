@@ -1,5 +1,6 @@
 import { getAdminSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
+import Image from 'next/image';
 import { LoginForm } from './LoginForm';
 
 interface LoginPageProps {
@@ -7,7 +8,7 @@ interface LoginPageProps {
 }
 
 export const metadata = {
-  title: 'Admin Login - Store Management',
+  title: 'تسجيل دخول الإدارة | متجر القائد للتقنية',
 };
 
 export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
@@ -19,13 +20,28 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Admin Portal</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-            Sign in with server-configured administrator credentials
-          </p>
+    <div className="h-svh w-full overflow-hidden flex items-center justify-center bg-[#FCFBF8] p-4" dir="rtl">
+      <div className="w-full max-w-md bg-white border border-border-light rounded-3xl p-8 sm:p-10 shadow-sm space-y-6">
+        {/* Brand Header */}
+        <div className="text-center space-y-3">
+          <div className="relative w-12 h-14 mx-auto">
+            <Image
+              src="/images/logo.png"
+              alt="شعار القائد"
+              fill
+              sizes="48px"
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="space-y-1">
+            <h1 className="font-marhey font-bold text-2xl text-[#1F1F1F]">
+              لوحة تحكم القائد
+            </h1>
+            <p className="font-alexandria font-normal text-xs text-muted-text">
+              سجل الدخول باستخدام بيانات المشرف لإدارة المتجر
+            </p>
+          </div>
         </div>
 
         <LoginForm redirectTo={params.from} />

@@ -4,15 +4,22 @@ import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createProduct, updateProduct, type ActionState } from '@/app/admin/products/actions';
-import type { Product } from '@/types/product';
+import type { Product, ProductColor } from '@/types/product';
 
 interface ProductFormProps {
   product?: Product;
   isEditing?: boolean;
 }
 
+interface ImageItem {
+  id: string;
+  url?: string;
+  file?: File;
+  previewUrl: string;
+  isExisting: boolean;
+}
+
 export function ProductForm({ product, isEditing = false }: ProductFormProps) {
-  // Bind product ID if editing
   const actionFunction = isEditing && product
     ? updateProduct.bind(null, product.id)
     : createProduct;
@@ -22,276 +29,648 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
     null
   );
 
-  const [imagePreview, setImagePreview] = useState<string | null>(product?.image_url || null);
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
+  // Initial images from product
+  const initialImages: ImageItem[] = (() => {
+    if (product?.gallery_images && product.gallery_images.length > 0) {
+      return product.gallery_images.map((url, idx) => ({
+        id: `existing-${idx}`,
+        url,
+        previewUrl: url,
+        isExisting: true,
+      }));
     }
+    if (product?.image_url) {
+      return [{
+        id: 'existing-0',
+        url: product.image_url,
+        previewUrl: product.image_url,
+        isExisting: true,
+      }];
+    }
+    return [];
+  })();
+
+  const [imageList, setImageList] = useState<ImageItem[]>(initialImages);
+
+  // State for Colors
+  const [colors, setColors] = useState<ProductColor[]>(product?.colors || []);
+  const [newColorName, setNewColorName] = useState('');
+  const [newColorHex, setNewColorHex] = useState('#2C2A28');
+
+  // State for Specs (Key-Value)
+  const initialSpecs = product?.specs
+    ? Object.entries(product.specs).map(([label, value]) => ({ label, value: String(value) }))
+    : [];
+  const [specsList, setSpecsList] = useState<{ label: string; value: string }[]>(initialSpecs);
+  const [newSpecLabel, setNewSpecLabel] = useState('');
+  const [newSpecValue, setNewSpecValue] = useState('');
+
+  // State for Highlights
+  const [highlights, setHighlights] = useState<string[]>(product?.highlights || []);
+  const [newHighlight, setNewHighlight] = useState('');
+
+  // Handle Multi-file selection
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newItems: ImageItem[] = Array.from(files).map((file, idx) => ({
+      id: `new-${Date.now()}-${idx}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      isExisting: false,
+    }));
+
+    setImageList((prev) => [...prev, ...newItems]);
+    // Reset file input value so user can add more if needed
+    e.target.value = '';
   };
 
+  const removeImage = (index: number) => {
+    setImageList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const makePrimaryImage = (index: number) => {
+    if (index === 0) return;
+    setImageList((prev) => {
+      const copy = [...prev];
+      const [selected] = copy.splice(index, 1);
+      return [selected, ...copy];
+    });
+  };
+
+  const addColor = () => {
+    if (!newColorName.trim()) return;
+    setColors([...colors, { name: newColorName.trim(), hex: newColorHex }]);
+    setNewColorName('');
+  };
+
+  const removeColor = (index: number) => {
+    setColors(colors.filter((_, i) => i !== index));
+  };
+
+  const addSpec = () => {
+    if (!newSpecLabel.trim() || !newSpecValue.trim()) return;
+    setSpecsList([...specsList, { label: newSpecLabel.trim(), value: newSpecValue.trim() }]);
+    setNewSpecLabel('');
+    setNewSpecValue('');
+  };
+
+  const removeSpec = (index: number) => {
+    setSpecsList(specsList.filter((_, i) => i !== index));
+  };
+
+  const addHighlight = () => {
+    if (!newHighlight.trim()) return;
+    setHighlights([...highlights, newHighlight.trim()]);
+    setNewHighlight('');
+  };
+
+  const removeHighlight = (index: number) => {
+    setHighlights(highlights.filter((_, i) => i !== index));
+  };
+
+  const specsObject = specsList.reduce((acc, curr) => {
+    acc[curr.label] = curr.value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  // Retained existing image URLs
+  const retainedExistingUrls = imageList
+    .filter((item) => item.isExisting && item.url)
+    .map((item) => item.url as string);
+
   return (
-    <form action={formAction} className="space-y-6 max-w-4xl">
+    <form action={formAction} className="space-y-6 max-w-4xl text-start" dir="rtl">
+      {/* Hidden inputs to pass data */}
+      <input type="hidden" name="colors" value={JSON.stringify(colors)} />
+      <input type="hidden" name="specs" value={JSON.stringify(specsObject)} />
+      <input type="hidden" name="highlights" value={JSON.stringify(highlights)} />
+      <input type="hidden" name="retained_gallery_images" value={JSON.stringify(retainedExistingUrls)} />
+
+      {/* Error Alert */}
       {state?.error && (
         <div
           role="alert"
-          className="p-4 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300"
+          className="p-4 rounded-2xl bg-red-50 border border-red-200 text-xs font-alexandria text-red-700"
         >
-          <p className="font-semibold">{state.error}</p>
+          <p className="font-bold">{state.error}</p>
         </div>
       )}
 
-      {/* Basic Information */}
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-          Basic Information
+      {/* 1. Basic Information */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          1. المعلومات الأساسية
         </h2>
 
-        <div>
-          <label
-            htmlFor="name"
-            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-          >
-            Product Name *
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            required
-            defaultValue={product?.name || ''}
-            placeholder="e.g. Premium Cotton T-Shirt"
-            disabled={isPending}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
-          />
-          {state?.fieldErrors?.name && (
-            <p className="text-xs text-red-600 mt-1">{state.fieldErrors.name[0]}</p>
-          )}
-        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5 sm:col-span-2">
+            <label htmlFor="name" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              اسم المنتج *
+            </label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              required
+              defaultValue={product?.name || ''}
+              placeholder="مثال: iPhone 16 Pro"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
+            />
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="slug"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
-              Slug (Optional - auto-generated if blank)
+          <div className="space-y-1.5">
+            <label htmlFor="slug" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              الرابط الدائم (Slug)
             </label>
             <input
               id="slug"
               name="slug"
               type="text"
               defaultValue={product?.slug || ''}
-              placeholder="e.g. premium-cotton-t-shirt"
-              disabled={isPending}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+              placeholder="يُنشأ تلقائيًا من الاسم إذا تُرك فارغًا"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors font-mono text-xs"
+              dir="ltr"
             />
-            {state?.fieldErrors?.slug && (
-              <p className="text-xs text-red-600 mt-1">{state.fieldErrors.slug[0]}</p>
-            )}
           </div>
 
-          <div>
-            <label
-              htmlFor="category"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
-              Category
+          <div className="space-y-1.5">
+            <label htmlFor="brand" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              العلامة التجارية (Brand)
             </label>
             <input
-              id="category"
-              name="category"
+              id="brand"
+              name="brand"
               type="text"
-              defaultValue={product?.category || ''}
-              placeholder="e.g. Apparel, Footwear, Accessories"
-              disabled={isPending}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+              defaultValue={product?.brand || ''}
+              placeholder="مثال: Apple, Samsung, Anker"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
-        </div>
 
-        <div>
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-          >
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            rows={4}
-            defaultValue={product?.description || ''}
-            placeholder="Detailed description of the product..."
-            disabled={isPending}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
-          />
+          <div className="space-y-1.5">
+            <label htmlFor="category" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              القسم (Category)
+            </label>
+            <select
+              id="category"
+              name="category"
+              defaultValue={product?.category || 'smartphones'}
+              className="w-full h-11 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors cursor-pointer"
+            >
+              <option value="smartphones">الهواتف الذكية (smartphones)</option>
+              <option value="laptops">اللابتوبات (laptops)</option>
+              <option value="tablets">التابلت (tablets)</option>
+              <option value="wearables">الساعات الذكية (wearables)</option>
+              <option value="audio">السماعات (audio)</option>
+              <option value="accessories">إكسسوارات الهواتف (accessories)</option>
+              <option value="chargers">الشواحن (chargers)</option>
+              <option value="cables">الكابلات (cables)</option>
+              <option value="powerbanks">الباور بانك (powerbanks)</option>
+              <option value="cases">حافظات الهواتف (cases)</option>
+              <option value="screen-protectors">واقيات الشاشة (screen-protectors)</option>
+              <option value="laptop-accessories">إكسسوارات اللابتوب (laptop-accessories)</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="available_branches" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              توفر المنتج في الفروع
+            </label>
+            <select
+              id="available_branches"
+              name="available_branches"
+              defaultValue={product?.available_branches || 'all'}
+              className="w-full h-11 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors cursor-pointer"
+            >
+              <option value="all">كافة الفروع (المحلة وسمنود)</option>
+              <option value="mahalla">فرع المحلة الكبرى فقط</option>
+              <option value="samanoud">فرع سمنود فقط</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <label htmlFor="description" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              وصف المنتج
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              rows={3}
+              defaultValue={product?.description || ''}
+              placeholder="نبذة مختصرة ومواصفات تسويقية للمنتج..."
+              className="w-full p-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Pricing and Inventory */}
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-          Pricing & Inventory
+      {/* 2. Pricing & Stock */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          2. السعر والمخزون
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label
-              htmlFor="price"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
-              Price ($) *
+          <div className="space-y-1.5">
+            <label htmlFor="price" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              سعر البيع (ج.م) *
             </label>
             <input
               id="price"
               name="price"
               type="number"
               step="0.01"
-              min="0"
               required
-              defaultValue={product?.price !== undefined ? product.price : ''}
-              placeholder="29.99"
-              disabled={isPending}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+              defaultValue={product?.price || ''}
+              placeholder="69900"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
-            {state?.fieldErrors?.price && (
-              <p className="text-xs text-red-600 mt-1">{state.fieldErrors.price[0]}</p>
-            )}
           </div>
 
-          <div>
-            <label
-              htmlFor="compare_at_price"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
-              Compare At Price ($)
+          <div className="space-y-1.5">
+            <label htmlFor="compare_at_price" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              السعر قبل الخصم (ج.م)
             </label>
             <input
               id="compare_at_price"
               name="compare_at_price"
               type="number"
               step="0.01"
-              min="0"
-              defaultValue={product?.compare_at_price ?? ''}
-              placeholder="39.99"
-              disabled={isPending}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+              defaultValue={product?.compare_at_price || ''}
+              placeholder="74000"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="stock"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-            >
-              Stock Quantity *
+          <div className="space-y-1.5">
+            <label htmlFor="stock" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+              المخزون المتوفر (قطع) *
             </label>
             <input
               id="stock"
               name="stock"
               type="number"
-              min="0"
-              step="1"
               required
-              defaultValue={product?.stock !== undefined ? product.stock : 0}
-              placeholder="100"
-              disabled={isPending}
-              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+              defaultValue={product?.stock ?? 10}
+              placeholder="10"
+              className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
-            {state?.fieldErrors?.stock && (
-              <p className="text-xs text-red-600 mt-1">{state.fieldErrors.stock[0]}</p>
-            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Product Photos (Premium UI/UX Gallery Manager) */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-6">
+        <div className="border-b border-[#F2EEE8] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-marhey font-bold text-lg text-[#1F1F1F]">
+              3. صور المنتج ومعرض الصور
+            </h2>
+            <p className="font-alexandria text-xs text-muted-text mt-0.5">
+              الصورة الأولى تمثل الغلاف الرئيسي في المتجر. يمكنك السحب أو الضغط لإضافة عدة زوايا للمنتج.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-alexandria font-bold text-xs px-3 py-1 rounded-full bg-gold/10 text-gold-dark border border-gold/20">
+              {imageList.length} {imageList.length === 1 ? 'صورة مختارة' : 'صور مختارة'}
+            </span>
           </div>
         </div>
 
-        <div className="pt-2">
-          <label className="flex items-center gap-2 cursor-pointer">
+        {/* Gallery Visual Workspace */}
+        {imageList.length > 0 ? (
+          <div className="space-y-4">
+            {/* Primary Cover Highlight Card */}
+            <div className="bg-[#FCFBF8] border-2 border-gold/40 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5 shadow-xs">
+              <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl bg-white border border-border-light overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                <Image
+                  src={imageList[0].previewUrl}
+                  alt="الصورة الرئيسية"
+                  fill
+                  sizes="176px"
+                  className="object-contain p-3"
+                  priority
+                />
+                <span className="absolute top-2 right-2 bg-gold text-white font-alexandria font-bold text-[10px] px-2.5 py-0.5 rounded-full shadow-xs">
+                  الغلاف الرئيسي ★
+                </span>
+              </div>
+
+              <div className="flex-1 w-full space-y-2 text-start">
+                <div className="space-y-1">
+                  <span className="font-alexandria font-bold text-xs text-gold-dark block">
+                    الصورة المعروضة في بطاقة المنتج وقوائم البحث
+                  </span>
+                  <p className="font-alexandria text-xs text-[#1F1F1F] leading-relaxed">
+                    هذه هي الصورة التي يراها العميل كواجهة أساسية. يمكنك النقر على زر &quot;تعيين كرئيسية&quot; في أي من الصور بالأسفل لتغيير صورة الغلاف.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F2EEE8] font-alexandria text-[11px] text-muted-text">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    {imageList[0].isExisting ? 'صورة مخزنة بالسيرفر' : 'جاهزة للرفع'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(0)}
+                    className="font-alexandria text-xs font-semibold text-red-600 hover:text-red-700 px-3 py-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    حذف الغلاف
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub Gallery Thumbnails Strip */}
+            {imageList.length > 1 && (
+              <div className="space-y-2 pt-2">
+                <span className="font-alexandria font-bold text-xs text-[#1F1F1F] block">
+                  باقي صور المعرض ({imageList.length - 1}):
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {imageList.slice(1).map((item, idx) => {
+                    const actualIndex = idx + 1;
+                    return (
+                      <div
+                        key={item.id}
+                        className="relative aspect-square rounded-2xl bg-[#FCFBF8] border border-[#DCD4CA] hover:border-gold overflow-hidden group transition-all shadow-2xs"
+                      >
+                        <Image
+                          src={item.previewUrl}
+                          alt={`معرض ${actualIndex}`}
+                          fill
+                          sizes="160px"
+                          className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                        />
+
+                        {/* Top Index Badge */}
+                        <span className="absolute top-2 right-2 bg-black/60 text-white font-mono text-[10px] px-1.5 py-0.5 rounded-md backdrop-blur-xs">
+                          #{actualIndex + 1}
+                        </span>
+
+                        {/* Hover Overlay Actions */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2 backdrop-blur-[1px]">
+                          <button
+                            type="button"
+                            onClick={() => makePrimaryImage(actualIndex)}
+                            className="w-full py-1 px-2 bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-[10px] rounded-lg shadow-sm transition-transform active:scale-95 cursor-pointer"
+                          >
+                            تعيين كرئيسية ★
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeImage(actualIndex)}
+                            className="py-1 px-3 bg-red-600/90 hover:bg-red-600 text-white font-alexandria font-medium text-[10px] rounded-lg shadow-sm transition-transform active:scale-95 cursor-pointer"
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Dropzone Upload Button */}
+        <label className="border-2 border-dashed border-[#DCD4CA] hover:border-gold rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center gap-3.5 cursor-pointer bg-[#FCFBF8] hover:bg-[#F9F6F0] transition-all text-center group">
+          <div className="w-14 h-14 rounded-2xl bg-gold/10 text-gold group-hover:scale-110 group-hover:bg-gold group-hover:text-white transition-all flex items-center justify-center shadow-xs">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <p className="font-alexandria font-bold text-sm text-[#1F1F1F] group-hover:text-gold-dark transition-colors">
+              + إضافة صور للمنتج من جهازك
+            </p>
+            <p className="font-alexandria text-xs text-muted-text">
+              يمكنك تحديد صورة أو عدة صور معًا (PNG, JPG, WEBP)
+            </p>
+          </div>
+          <input
+            type="file"
+            name="gallery_files"
+            multiple
+            accept="image/png, image/jpeg, image/webp"
+            onChange={handleFilesSelected}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {/* 4. Colors Manager */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          4. الألوان المتاحة
+        </h2>
+
+        {/* Existing Colors List */}
+        <div className="flex flex-wrap gap-2">
+          {colors.map((c, idx) => (
+            <div
+              key={idx}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#F2EEE8] border border-[#DCD4CA] font-alexandria text-xs"
+            >
+              <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ backgroundColor: c.hex }} />
+              <span className="font-semibold">{c.name}</span>
+              <button
+                type="button"
+                onClick={() => removeColor(idx)}
+                className="text-red-500 hover:text-red-700 cursor-pointer text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Color Form */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <input
+            type="text"
+            value={newColorName}
+            onChange={(e) => setNewColorName(e.target.value)}
+            placeholder="اسم اللون (مثال: تيتانيوم أسود)"
+            className="flex-1 min-w-45 h-10 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold"
+          />
+          <input
+            type="color"
+            value={newColorHex}
+            onChange={(e) => setNewColorHex(e.target.value)}
+            className="w-12 h-10 p-1 bg-white border border-[#DCD4CA] rounded-xl cursor-pointer"
+            title="اختر رمز اللون"
+          />
+          <button
+            type="button"
+            onClick={addColor}
+            className="h-10 px-4 bg-[#F2EEE8] hover:bg-gold-tint text-[#1F1F1F] font-alexandria font-bold text-xs rounded-xl transition-colors cursor-pointer"
+          >
+            + إضافة لون
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Specifications Table Manager */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          5. المواصفات الفنية
+        </h2>
+
+        {/* Existing Specs */}
+        <div className="divide-y divide-[#F2EEE8]">
+          {specsList.map((s, idx) => (
+            <div key={idx} className="py-2.5 flex items-center justify-between gap-4 font-alexandria text-xs">
+              <span className="font-bold text-[#1F1F1F]">{s.label}</span>
+              <span className="text-muted-text">{s.value}</span>
+              <button
+                type="button"
+                onClick={() => removeSpec(idx)}
+                className="text-red-500 hover:text-red-700 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Spec Row */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+          <input
+            type="text"
+            value={newSpecLabel}
+            onChange={(e) => setNewSpecLabel(e.target.value)}
+            placeholder="البند (مثال: الشاشة)"
+            className="w-full sm:w-1/3 h-10 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold"
+          />
+          <input
+            type="text"
+            value={newSpecValue}
+            onChange={(e) => setNewSpecValue(e.target.value)}
+            placeholder="القيمة (مثال: 6.3 بوصة Super Retina XDR)"
+            className="w-full sm:flex-1 h-10 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold"
+          />
+          <button
+            type="button"
+            onClick={addSpec}
+            className="w-full sm:w-auto h-10 px-4 bg-[#F2EEE8] hover:bg-gold-tint text-[#1F1F1F] font-alexandria font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
+          >
+            + إضافة مواصفة
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Highlights List */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          6. أبرز المميزات
+        </h2>
+
+        {/* Existing Highlights */}
+        <ul className="space-y-2">
+          {highlights.map((h, idx) => (
+            <li key={idx} className="flex items-center justify-between gap-3 p-2 rounded-xl bg-[#FCFBF8] border border-border-light font-alexandria text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-gold font-bold">◆</span>
+                <span className="text-[#1F1F1F]">{h}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeHighlight(idx)}
+                className="text-red-500 hover:text-red-700 cursor-pointer font-bold px-2"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {/* Add Highlight */}
+        <div className="flex items-center gap-3 pt-2">
+          <input
+            type="text"
+            value={newHighlight}
+            onChange={(e) => setNewHighlight(e.target.value)}
+            placeholder="ميزة جديدة (مثال: تصوير سينمائي 4K)"
+            className="flex-1 h-10 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold"
+          />
+          <button
+            type="button"
+            onClick={addHighlight}
+            className="h-10 px-4 bg-[#F2EEE8] hover:bg-gold-tint text-[#1F1F1F] font-alexandria font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
+          >
+            + إضافة ميزة
+          </button>
+        </div>
+      </div>
+
+      {/* 7. Status & Toggles */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border-light shadow-xs space-y-4">
+        <h2 className="font-marhey font-bold text-lg text-[#1F1F1F] border-b border-[#F2EEE8] pb-3">
+          7. حالة المنتج بالمتجر
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="flex items-center gap-3 p-4 rounded-2xl bg-[#FCFBF8] border border-border-light cursor-pointer hover:border-gold transition-colors">
             <input
               type="checkbox"
               name="is_active"
-              value="true"
               defaultChecked={product ? product.is_active : true}
-              disabled={isPending}
-              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+              className="w-5 h-5 rounded-md accent-gold cursor-pointer"
             />
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-              Active product (visible to customers in store)
-            </span>
+            <div>
+              <span className="font-alexandria font-bold text-xs text-[#1F1F1F] block">
+                تفعيل المنتج بالمتجر (نشط)
+              </span>
+              <span className="font-alexandria text-[11px] text-muted-text">
+                يظهر المنتج للعملاء في قوائم البحث والأقسام
+              </span>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 p-4 rounded-2xl bg-[#FCFBF8] border border-border-light cursor-pointer hover:border-gold transition-colors">
+            <input
+              type="checkbox"
+              name="is_featured"
+              defaultChecked={product ? product.is_featured : false}
+              className="w-5 h-5 rounded-md accent-gold cursor-pointer"
+            />
+            <div>
+              <span className="font-alexandria font-bold text-xs text-[#1F1F1F] block">
+                منتج مميز (الصفحة الرئيسية)
+              </span>
+              <span className="font-alexandria text-[11px] text-muted-text">
+                يظهر في سلايدر المنتجات المميزة بالرئيسية
+              </span>
+            </div>
           </label>
         </div>
       </div>
 
-      {/* Media / Image Upload */}
-      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-          Product Image
-        </h2>
-
-        <div className="flex flex-col sm:flex-row items-start gap-6">
-          {imagePreview ? (
-            <div className="relative w-36 h-36 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex-shrink-0">
-              <Image
-                src={imagePreview}
-                alt="Product preview"
-                fill
-                unoptimized
-                className="object-cover"
-              />
-            </div>
-          ) : (
-            <div className="w-36 h-36 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-xs text-zinc-400 flex-shrink-0">
-              No Image
-            </div>
-          )}
-
-          <div className="flex-1 space-y-2">
-            <label
-              htmlFor="image"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              {imagePreview ? 'Replace Image' : 'Upload Image'}
-            </label>
-            <input
-              id="image"
-              name="image"
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              disabled={isPending}
-              className="block w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 dark:file:bg-zinc-800 file:text-zinc-700 dark:file:text-zinc-300 hover:file:bg-zinc-200 cursor-pointer"
-            />
-            <p className="text-xs text-zinc-500">
-              Supports JPEG, PNG, WebP, SVG, GIF. Stored securely in Supabase Storage.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Action Buttons */}
-      <div className="flex items-center gap-3 pt-4">
+      <div className="flex items-center justify-end gap-3 pt-4">
+        <Link
+          href="/admin/products"
+          className="h-12 px-6 rounded-2xl bg-[#F2EEE8] hover:bg-gold-tint text-[#1F1F1F] font-alexandria font-bold text-xs flex items-center justify-center transition-colors"
+        >
+          إلغاء
+        </Link>
+
         <button
           type="submit"
           disabled={isPending}
-          className="px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+          className="h-12 px-8 rounded-2xl bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-xs shadow-md shadow-gold/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
         >
-          {isPending
-            ? isEditing
-              ? 'Saving Changes...'
-              : 'Creating Product...'
-            : isEditing
-            ? 'Save Product Changes'
-            : 'Create Product'}
+          {isPending ? 'جاري الحفظ...' : isEditing ? 'تحديث المنتج' : 'حفظ ونشر المنتج'}
         </button>
-
-        <Link
-          href="/admin/products"
-          className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium rounded-lg transition-colors"
-        >
-          Cancel
-        </Link>
       </div>
     </form>
   );

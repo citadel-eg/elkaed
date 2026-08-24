@@ -4,26 +4,18 @@ import { ProductTable } from '@/components/admin/ProductTable';
 import type { Product } from '@/types/product';
 
 export const metadata = {
-  title: 'Products - Admin Dashboard',
+  title: 'إدارة المنتجات | لوحة تحكم القائد',
 };
 
-// Ensure fresh data on every request in the admin panel
 export const dynamic = 'force-dynamic';
 
 export default async function AdminProductsPage() {
   const supabase = createAdminClient();
 
-  let { data: products, error } = await supabase
+  const { data: products, error } = await supabase
     .from('products')
     .select('*')
     .order('created_at', { ascending: false });
-
-  // Resilient fallback if created_at column is not yet present
-  if (error && error.code === '42703') {
-    const fallback = await supabase.from('products').select('*');
-    products = fallback.data;
-    error = fallback.error;
-  }
 
   if (error) {
     console.error('Failed to fetch admin products:', error.message || error);
@@ -32,29 +24,33 @@ export default async function AdminProductsPage() {
   const productList: Product[] = products || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-start" dir="rtl">
+      {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Products</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-0.5">
-            Manage your store inventory, prices, and product visibility
+          <h1 className="font-marhey font-bold text-2xl sm:text-3xl text-[#1F1F1F]">
+            المنتجات ({productList.length})
+          </h1>
+          <p className="font-alexandria text-xs text-muted-text mt-1">
+            إدارة المخزون، الأسعار، المواصفات، وحالة الظهور في المتجر
           </p>
         </div>
         <Link
           href="/admin/products/new"
-          className="inline-flex items-center justify-center px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium rounded-lg shadow-sm transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-2xl bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-xs shadow-md shadow-gold/20 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
         >
-          + Add Product
+          <span>+ إضافة منتج جديد</span>
         </Link>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
-          <p className="font-semibold">Unable to fetch products from Supabase</p>
-          <p className="mt-1 text-xs">{error.message}</p>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl font-alexandria text-xs text-red-700">
+          <p className="font-bold">حدث خطأ أثناء تحميل المنتجات من قاعدة البيانات</p>
+          <p className="mt-0.5">{error.message}</p>
         </div>
       )}
 
+      {/* Products Table */}
       <ProductTable products={productList} />
     </div>
   );

@@ -14,55 +14,46 @@ export interface ActionState {
 }
 
 /**
- * Uploads a product image file to Supabase storage bucket 'products'
+ * Uploads a file to Supabase storage bucket 'products'
  */
-async function uploadProductImage(
+async function uploadProductFile(
   supabase: ReturnType<typeof createAdminClient>,
-  productId: string,
   file: File
 ): Promise<string> {
   const fileExt = file.name.split('.').pop() || 'jpg';
-  const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-  const filePath = `${productId}/${cleanFileName}`;
+  const cleanFileName = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
   const { error: uploadError } = await supabase.storage
     .from('products')
-    .upload(filePath, buffer, {
+    .upload(cleanFileName, buffer, {
       contentType: file.type || 'image/jpeg',
       upsert: true,
     });
 
   if (uploadError) {
     console.error('Storage upload error:', uploadError);
-    throw new Error(`Failed to upload image: ${uploadError.message}`);
+    throw new Error(`فشل رفع الصورة: ${uploadError.message}`);
   }
 
   const { data: publicUrlData } = supabase.storage
     .from('products')
-    .getPublicUrl(filePath);
+    .getPublicUrl(cleanFileName);
 
   return publicUrlData.publicUrl;
 }
 
 /**
- * Deletes a product image from Supabase storage if it matches our bucket URL
+ * Helper to parse JSON fields safely
  */
-async function deleteProductImageFromStorage(
-  supabase: ReturnType<typeof createAdminClient>,
-  imageUrl: string
-) {
+function safeJsonParse<T>(val: FormDataEntryValue | null, fallback: T): T {
+  if (!val || typeof val !== 'string') return fallback;
   try {
-    const url = new URL(imageUrl);
-    const parts = url.pathname.split('/products/');
-    if (parts.length > 1) {
-      const storagePath = decodeURIComponent(parts[1]);
-      await supabase.storage.from('products').remove([storagePath]);
-    }
-  } catch (err) {
-    console.warn('Could not parse image URL for deletion cleanup:', err);
+    return JSON.parse(val) as T;
+  } catch {
+    return fallback;
   }
 }
 
@@ -78,11 +69,14 @@ export async function createProduct(
   const rawData = {
     name: formData.get('name'),
     slug: formData.get('slug'),
+    brand: formData.get('brand'),
+    category: formData.get('category'),
     description: formData.get('description'),
     price: formData.get('price'),
     compare_at_price: formData.get('compare_at_price'),
-    category: formData.get('category'),
     stock: formData.get('stock'),
+    available_branches: formData.get('available_branches') || 'all',
+    is_featured: formData.get('is_featured') === 'true' || formData.get('is_featured') === 'on',
     is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
   };
 
@@ -90,64 +84,90 @@ export async function createProduct(
   if (!parsed.success) {
     return {
       success: false,
-      error: 'Please fix validation errors in the form.',
+      error: 'يرجى مراجعة وتصحيح الحقول المطلوبة.',
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
 
   const supabase = createAdminClient();
-  const productId = crypto.randomUUID();
 
-  // Handle Slug generation if omitted
-  let finalSlug = parsed.data.slug || slugify(parsed.data.name);
+  // Generate unique slug
+  let finalSlug = parsed.data.slug ? slugify(parsed.data.slug) : slugify(parsed.data.name);
   if (!finalSlug) {
-    finalSlug = `product-${productId.substring(0, 8)}`;
+    finalSlug = `product-${Date.now()}`;
   }
 
-  // Handle image upload if a file was provided
-  let imageUrl: string | null = null;
-  const imageFile = formData.get('image') as File | null;
-  if (imageFile && imageFile.size > 0 && imageFile.name !== 'undefined') {
-    try {
-      imageUrl = await uploadProductImage(supabase, productId, imageFile);
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Image upload failed.',
-      };
+  const { data: existingProduct } = await supabase
+    .from('products')
+    .select('id')
+    .eq('slug', finalSlug)
+    .maybeSingle();
+
+  if (existingProduct) {
+    finalSlug = `${finalSlug}-${Math.random().toString(36).substring(2, 6)}`;
+  }
+
+  // Handle multiple image uploads
+  const imageFiles = formData.getAll('gallery_files') as File[];
+  const uploadedUrls: string[] = [];
+
+  for (const file of imageFiles) {
+    if (file && file.size > 0 && file.name) {
+      try {
+        const uploadedUrl = await uploadProductFile(supabase, file);
+        uploadedUrls.push(uploadedUrl);
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: (err as Error).message || 'حدث خطأ أثناء رفع صور المنتج.',
+        };
+      }
     }
   }
 
-  const { error: insertError } = await supabase.from('products').insert({
-    id: productId,
+  // Retained existing images (if any)
+  const retainedImages = safeJsonParse<string[]>(formData.get('retained_gallery_images'), []);
+  const allGalleryImages = [...retainedImages, ...uploadedUrls];
+  const primaryImageUrl = allGalleryImages.length > 0 ? allGalleryImages[0] : null;
+
+  // Parse JSON/Array fields
+  const colors = safeJsonParse(formData.get('colors'), null);
+  const specs = safeJsonParse(formData.get('specs'), null);
+  const highlights = safeJsonParse(formData.get('highlights'), null);
+
+  const newProductData = {
     name: parsed.data.name,
     slug: finalSlug,
-    description: parsed.data.description || null,
+    brand: parsed.data.brand,
+    category: parsed.data.category,
+    description: parsed.data.description,
     price: parsed.data.price,
-    compare_at_price: parsed.data.compare_at_price || null,
-    image_url: imageUrl,
-    category: parsed.data.category || null,
+    compare_at_price: parsed.data.compare_at_price,
+    image_url: primaryImageUrl,
+    gallery_images: allGalleryImages,
+    colors: colors,
+    specs: specs,
+    highlights: highlights,
     stock: parsed.data.stock,
+    available_branches: parsed.data.available_branches,
+    is_featured: parsed.data.is_featured,
     is_active: parsed.data.is_active,
-  });
+  };
+
+  const { error: insertError } = await supabase.from('products').insert(newProductData);
 
   if (insertError) {
-    console.error('Failed to insert product into database:', insertError);
-    if (insertError.code === '23505') {
-      return {
-        success: false,
-        error: `A product with slug "${finalSlug}" already exists. Please choose a different name or slug.`,
-      };
-    }
+    console.error('Failed to create product:', insertError);
     return {
       success: false,
-      error: `Database error: ${insertError.message}`,
+      error: `فشل حفظ المنتج: ${insertError.message}`,
     };
   }
 
   revalidatePath('/admin/products');
   revalidatePath('/products');
   revalidatePath('/');
+  revalidatePath('/categories');
   redirect('/admin/products');
 }
 
@@ -161,19 +181,22 @@ export async function updateProduct(
 ): Promise<ActionState> {
   await requireAdminSession();
 
-  const idParsed = ProductIdSchema.safeParse(productId);
-  if (!idParsed.success) {
-    return { success: false, error: 'Invalid product ID.' };
+  const idValidation = ProductIdSchema.safeParse(productId);
+  if (!idValidation.success) {
+    return { success: false, error: 'معرف المنتج غير صالح.' };
   }
 
   const rawData = {
     name: formData.get('name'),
     slug: formData.get('slug'),
+    brand: formData.get('brand'),
+    category: formData.get('category'),
     description: formData.get('description'),
     price: formData.get('price'),
     compare_at_price: formData.get('compare_at_price'),
-    category: formData.get('category'),
     stock: formData.get('stock'),
+    available_branches: formData.get('available_branches') || 'all',
+    is_featured: formData.get('is_featured') === 'true' || formData.get('is_featured') === 'on',
     is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
   };
 
@@ -181,80 +204,148 @@ export async function updateProduct(
   if (!parsed.success) {
     return {
       success: false,
-      error: 'Please fix validation errors in the form.',
+      error: 'يرجى مراجعة وتصحيح الحقول المطلوبة.',
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
 
   const supabase = createAdminClient();
 
-  // Get current product details
-  const { data: existingProduct, error: fetchError } = await supabase
+  const { data: currentProduct } = await supabase
     .from('products')
-    .select('id, image_url')
+    .select('*')
     .eq('id', productId)
     .single();
 
-  if (fetchError || !existingProduct) {
-    return { success: false, error: 'Product not found.' };
-  }
+  let finalSlug = parsed.data.slug ? slugify(parsed.data.slug) : slugify(parsed.data.name);
+  if (!finalSlug) finalSlug = currentProduct?.slug || `product-${productId.substring(0, 8)}`;
 
-  let finalSlug = parsed.data.slug || slugify(parsed.data.name);
-  if (!finalSlug) {
-    finalSlug = `product-${productId.substring(0, 8)}`;
-  }
+  // Handle multiple image uploads
+  const imageFiles = formData.getAll('gallery_files') as File[];
+  const newlyUploadedUrls: string[] = [];
 
-  let imageUrl = existingProduct.image_url;
-  const imageFile = formData.get('image') as File | null;
-  if (imageFile && imageFile.size > 0 && imageFile.name !== 'undefined') {
-    try {
-      imageUrl = await uploadProductImage(supabase, productId, imageFile);
-      if (existingProduct.image_url) {
-        await deleteProductImageFromStorage(supabase, existingProduct.image_url);
+  for (const file of imageFiles) {
+    if (file && file.size > 0 && file.name) {
+      try {
+        const uploadedUrl = await uploadProductFile(supabase, file);
+        newlyUploadedUrls.push(uploadedUrl);
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: (err as Error).message || 'حدث خطأ أثناء رفع صور المنتج.',
+        };
       }
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Image upload failed.',
-      };
     }
   }
+
+  // Retained existing images
+  const retainedImages = safeJsonParse<string[]>(
+    formData.get('retained_gallery_images'),
+    currentProduct?.gallery_images || (currentProduct?.image_url ? [currentProduct.image_url] : [])
+  );
+
+  const allGalleryImages = [...retainedImages, ...newlyUploadedUrls];
+  const primaryImageUrl = allGalleryImages.length > 0 ? allGalleryImages[0] : null;
+
+  // Parse JSON/Array fields
+  const colors = safeJsonParse(formData.get('colors'), currentProduct?.colors || null);
+  const specs = safeJsonParse(formData.get('specs'), currentProduct?.specs || null);
+  const highlights = safeJsonParse(formData.get('highlights'), currentProduct?.highlights || null);
+
+  const updatedData = {
+    name: parsed.data.name,
+    slug: finalSlug,
+    brand: parsed.data.brand,
+    category: parsed.data.category,
+    description: parsed.data.description,
+    price: parsed.data.price,
+    compare_at_price: parsed.data.compare_at_price,
+    image_url: primaryImageUrl,
+    gallery_images: allGalleryImages,
+    colors: colors,
+    specs: specs,
+    highlights: highlights,
+    stock: parsed.data.stock,
+    available_branches: parsed.data.available_branches,
+    is_featured: parsed.data.is_featured,
+    is_active: parsed.data.is_active,
+    updated_at: new Date().toISOString(),
+  };
 
   const { error: updateError } = await supabase
     .from('products')
-    .update({
-      name: parsed.data.name,
-      slug: finalSlug,
-      description: parsed.data.description || null,
-      price: parsed.data.price,
-      compare_at_price: parsed.data.compare_at_price || null,
-      image_url: imageUrl,
-      category: parsed.data.category || null,
-      stock: parsed.data.stock,
-      is_active: parsed.data.is_active,
-    })
+    .update(updatedData)
     .eq('id', productId);
 
   if (updateError) {
-    console.error('Failed to update product in database:', updateError);
-    if (updateError.code === '23505') {
-      return {
-        success: false,
-        error: `A product with slug "${finalSlug}" already exists. Please choose a different slug.`,
-      };
-    }
+    console.error('Failed to update product:', updateError);
     return {
       success: false,
-      error: `Database error: ${updateError.message}`,
+      error: `فشل تعديل المنتج: ${updateError.message}`,
     };
   }
 
   revalidatePath('/admin/products');
-  revalidatePath(`/admin/products/${productId}`);
-  revalidatePath('/products');
+  revalidatePath(`/products/${finalSlug}`);
   revalidatePath(`/products/${productId}`);
+  revalidatePath('/products');
   revalidatePath('/');
+  revalidatePath('/categories');
   redirect('/admin/products');
+}
+
+/**
+ * Toggle product active status
+ */
+export async function toggleProductActive(
+  productId: string,
+  currentState: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession();
+    const supabase = createAdminClient();
+
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: !currentState, updated_at: new Date().toISOString() })
+      .eq('id', productId);
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    revalidatePath('/products');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Toggle product featured status
+ */
+export async function toggleProductFeatured(
+  productId: string,
+  currentState: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession();
+    const supabase = createAdminClient();
+
+    const { error } = await supabase
+      .from('products')
+      .update({ is_featured: !currentState, updated_at: new Date().toISOString() })
+      .eq('id', productId);
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    revalidatePath('/products');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 /**
@@ -263,79 +354,17 @@ export async function updateProduct(
 export async function deleteProduct(productId: string): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
-
-    const idParsed = ProductIdSchema.safeParse(productId);
-    if (!idParsed.success) {
-      return { success: false, error: 'Invalid product ID.' };
-    }
-
     const supabase = createAdminClient();
 
-    // Fetch existing product for image cleanup
-    const { data: existingProduct } = await supabase
-      .from('products')
-      .select('image_url')
-      .eq('id', productId)
-      .single();
-
-    if (existingProduct?.image_url) {
-      await deleteProductImageFromStorage(supabase, existingProduct.image_url);
-    }
-
-    const { error: deleteError } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId);
-
-    if (deleteError) {
-      console.error('Failed to delete product:', deleteError);
-      return { success: false, error: `Failed to delete product: ${deleteError.message}` };
-    }
+    const { error } = await supabase.from('products').delete().eq('id', productId);
+    if (error) throw error;
 
     revalidatePath('/admin/products');
     revalidatePath('/products');
     revalidatePath('/');
+    revalidatePath('/categories');
     return { success: true };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Failed to delete product.',
-    };
-  }
-}
-
-/**
- * Toggle product is_active status
- */
-export async function toggleProductActive(
-  productId: string,
-  currentStatus: boolean
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await requireAdminSession();
-
-    const idParsed = ProductIdSchema.safeParse(productId);
-    if (!idParsed.success) {
-      return { success: false, error: 'Invalid product ID.' };
-    }
-
-    const supabase = createAdminClient();
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({ is_active: !currentStatus })
-      .eq('id', productId);
-
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    revalidatePath('/admin/products');
-    revalidatePath('/products');
-    return { success: true };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Failed to update status.',
-    };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
   }
 }

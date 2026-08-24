@@ -10,24 +10,24 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-4 text-start">
       {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
 
       {state?.error && (
         <div
           role="alert"
-          className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
+          className="p-3 text-xs font-alexandria text-red-700 bg-red-50 border border-red-200 rounded-xl"
         >
           {state.error}
         </div>
       )}
 
-      <div>
+      <div className="space-y-1.5">
         <label
           htmlFor="username"
-          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+          className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
         >
-          Admin Username
+          اسم المستخدم
         </label>
         <input
           id="username"
@@ -37,16 +37,16 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           autoComplete="username"
           placeholder="admin"
           disabled={isPending}
-          className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md shadow-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+          className="w-full h-11 px-4 border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] bg-white placeholder-[#B4A89A] focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all disabled:opacity-50"
         />
       </div>
 
-      <div>
+      <div className="space-y-1.5">
         <label
           htmlFor="password"
-          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+          className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
         >
-          Admin Password
+          كلمة المرور
         </label>
         <input
           id="password"
@@ -56,16 +56,16 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           autoComplete="current-password"
           placeholder="••••••••"
           disabled={isPending}
-          className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md shadow-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 disabled:opacity-50"
+          className="w-full h-11 px-4 border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] bg-white placeholder-[#B4A89A] focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all disabled:opacity-50"
         />
       </div>
 
       <button
         type="submit"
         disabled={isPending}
-        className="w-full py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-medium rounded-md shadow transition-colors disabled:opacity-50 flex items-center justify-center cursor-pointer"
+        className="w-full h-12 mt-2 bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-sm rounded-xl shadow-md shadow-gold/20 transition-all disabled:opacity-50 flex items-center justify-center cursor-pointer active:scale-98"
       >
-        {isPending ? 'Authenticating...' : 'Sign In to Admin'}
+        {isPending ? 'جاري التحقق...' : 'تسجيل الدخول'}
       </button>
     </form>
   );

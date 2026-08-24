@@ -23,7 +23,7 @@ export async function loginAdmin(
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message || 'Invalid credentials input.',
+      error: 'يرجى إدخال اسم المستخدم وكلمة المرور بشكل صحيح.',
     };
   }
 
@@ -31,7 +31,7 @@ export async function loginAdmin(
   if (!isValid) {
     return {
       success: false,
-      error: 'Invalid username or password.',
+      error: 'اسم المستخدم أو كلمة المرور غير صحيحة.',
     };
   }
 
