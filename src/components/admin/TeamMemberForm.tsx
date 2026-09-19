@@ -1,10 +1,12 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, startTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createTeamMember, updateTeamMember, type ActionState } from '@/app/admin/team/actions';
 import type { TeamMember } from '@/types/team';
+import { compressImage } from '@/lib/utils/image';
+import { createClient as createBrowserClient } from '@/lib/supabase/client';
 
 interface TeamMemberFormProps {
   member?: TeamMember;
@@ -22,20 +24,70 @@ export function TeamMemberForm({ member, isEditing = false }: TeamMemberFormProp
   );
 
   const [imagePreview, setImagePreview] = useState<string | null>(member?.image_url || null);
-  const [imageUrlText] = useState<string>(member?.image_url || '');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imageUrlText, setImageUrlText] = useState<string>(member?.image_url || '');
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
     }
   };
 
-  return (
-    <form action={formAction} className="w-full max-w-4xl space-y-6 text-start" dir="rtl">
-      <input type="hidden" name="image_url_text" value={imageUrlText} />
+  const handleFormSubmit = async (formData: FormData) => {
+    setIsUploading(true);
+    formData.delete('image_file');
+    formData.delete('image_url_text');
 
+    let finalImageUrl = imageUrlText;
+
+    if (selectedFile) {
+      let fileToSend = selectedFile;
+      try {
+        fileToSend = await compressImage(selectedFile, 800, 0.85);
+      } catch {}
+
+      let directUploadedUrl: string | null = null;
+      try {
+        const supabase = createBrowserClient();
+        const fileExt = fileToSend.name.split('.').pop()?.toLowerCase() || 'webp';
+        const cleanFileName = `avatar-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+        const { data, error } = await supabase.storage
+          .from('team')
+          .upload(cleanFileName, fileToSend, {
+            contentType: fileToSend.type || 'image/webp',
+            upsert: true,
+          });
+
+        if (!error && data) {
+          const { data: publicUrlData } = supabase.storage
+            .from('team')
+            .getPublicUrl(cleanFileName);
+          directUploadedUrl = publicUrlData.publicUrl;
+        }
+      } catch {}
+
+      if (directUploadedUrl) {
+        finalImageUrl = directUploadedUrl;
+      } else {
+        formData.append('image_file', fileToSend);
+      }
+    }
+
+    formData.append('image_url_text', finalImageUrl);
+    setIsUploading(false);
+
+    startTransition(() => {
+      formAction(formData);
+    });
+  };
+
+  return (
+    <form action={handleFormSubmit} className="w-full max-w-4xl space-y-6 text-start" dir="rtl">
       {state?.error && (
         <div
           role="alert"

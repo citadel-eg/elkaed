@@ -9,6 +9,8 @@ import {
   type ActionState,
 } from "@/app/admin/products/actions";
 import type { Product, ProductColor } from "@/types/product";
+import { compressImage } from "@/lib/utils/image";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 interface ProductFormProps {
   product?: Product;
@@ -170,42 +172,109 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
     {} as Record<string, string>,
   );
 
-  const handleFormSubmit = (formData: FormData) => {
-    // Clear out any default input values
-    formData.delete("gallery_files");
-    formData.delete("retained_gallery_images");
-    formData.delete("gallery_order");
+  const [isUploading, setIsUploading] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
 
-    let fileCounter = 0;
-    const galleryOrder: Array<{
-      type: "existing" | "new";
-      url?: string;
-      index?: number;
-    }> = [];
+  const handleFormSubmit = async (formData: FormData) => {
+    setClientError(null);
+    setIsUploading(true);
 
-    for (const item of imageList) {
-      if (item.file) {
-        formData.append("gallery_files", item.file);
-        galleryOrder.push({ type: "new", index: fileCounter });
-        fileCounter++;
-      } else if (item.url) {
-        galleryOrder.push({ type: "existing", url: item.url });
+    try {
+      formData.delete("gallery_files");
+      formData.delete("retained_gallery_images");
+      formData.delete("gallery_order");
+
+      let supabaseClient: ReturnType<typeof createBrowserClient> | null = null;
+      try {
+        supabaseClient = createBrowserClient();
+      } catch (e) {
+        console.warn("Supabase browser client init warning:", e);
       }
+
+      const resolvedGalleryOrder: Array<{
+        type: "existing" | "new";
+        url?: string;
+        index?: number;
+      }> = [];
+
+      let serverFileCounter = 0;
+
+      for (const item of imageList) {
+        if (item.url && !item.file) {
+          resolvedGalleryOrder.push({ type: "existing", url: item.url });
+        } else if (item.file) {
+          let fileToSend = item.file;
+          // 1. Compress image in browser to keep it lightweight (< 300KB)
+          try {
+            fileToSend = await compressImage(item.file);
+          } catch (compErr) {
+            console.warn("Compression fallback:", compErr);
+          }
+
+          let directUploadedUrl: string | null = null;
+
+          // 2. Direct upload to Supabase storage from browser (bypassing Vercel completely)
+          if (supabaseClient) {
+            try {
+              const fileExt =
+                fileToSend.name.split(".").pop()?.toLowerCase() || "webp";
+              const cleanFileName = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+              const { data: uploadData, error: uploadErr } =
+                await supabaseClient.storage
+                  .from("products")
+                  .upload(cleanFileName, fileToSend, {
+                    contentType: fileToSend.type || "image/webp",
+                    upsert: true,
+                  });
+
+              if (!uploadErr && uploadData) {
+                const { data: publicUrlData } = supabaseClient.storage
+                  .from("products")
+                  .getPublicUrl(cleanFileName);
+                directUploadedUrl = publicUrlData.publicUrl;
+              }
+            } catch (storageErr) {
+              console.warn("Client direct upload failed, fallback to server action:", storageErr);
+            }
+          }
+
+          if (directUploadedUrl) {
+            // Successfully uploaded directly! No binary sent to Vercel
+            resolvedGalleryOrder.push({
+              type: "existing",
+              url: directUploadedUrl,
+            });
+          } else {
+            // Fallback: send lightweight compressed file to server action
+            formData.append("gallery_files", fileToSend);
+            resolvedGalleryOrder.push({
+              type: "new",
+              index: serverFileCounter,
+            });
+            serverFileCounter++;
+          }
+        }
+      }
+
+      formData.append("gallery_order", JSON.stringify(resolvedGalleryOrder));
+
+      const retainedExistingUrls = resolvedGalleryOrder
+        .filter((item) => item.type === "existing" && item.url)
+        .map((item) => item.url as string);
+      formData.append(
+        "retained_gallery_images",
+        JSON.stringify(retainedExistingUrls),
+      );
+
+      startTransition(() => {
+        formAction(formData);
+      });
+    } catch (err: unknown) {
+      setClientError((err as Error).message || "حدث خطأ أثناء معالجة الصور.");
+    } finally {
+      setIsUploading(false);
     }
-
-    formData.append("gallery_order", JSON.stringify(galleryOrder));
-
-    const retainedExistingUrls = imageList
-      .filter((item) => !item.file && item.url)
-      .map((item) => item.url as string);
-    formData.append(
-      "retained_gallery_images",
-      JSON.stringify(retainedExistingUrls),
-    );
-
-    startTransition(() => {
-      formAction(formData);
-    });
   };
 
   return (
@@ -224,12 +293,12 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
       />
 
       {/* Error Alert */}
-      {state?.error && (
+      {(state?.error || clientError) && (
         <div
           role="alert"
           className="p-4 rounded-2xl bg-red-50 border border-red-200 text-xs font-alexandria text-red-700"
         >
-          <p className="font-bold">{state.error}</p>
+          <p className="font-bold">{clientError || state?.error}</p>
         </div>
       )}
 
@@ -815,14 +884,16 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || isUploading}
           className="h-12 px-8 rounded-2xl bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-xs shadow-md shadow-gold/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
         >
-          {isPending
-            ? "جاري الحفظ..."
-            : isEditing
-              ? "تحديث المنتج"
-              : "حفظ ونشر المنتج"}
+          {isUploading
+            ? "جاري رفع ومعالجة الصور..."
+            : isPending
+              ? "جاري الحفظ..."
+              : isEditing
+                ? "تحديث المنتج"
+                : "حفظ ونشر المنتج"}
         </button>
       </div>
     </form>
