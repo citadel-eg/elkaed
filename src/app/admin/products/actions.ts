@@ -1,11 +1,11 @@
-'use server';
+"use server";
 
-import { requireAdminSession } from '@/lib/auth/session';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { ProductFormSchema, ProductIdSchema } from '@/lib/validations/product';
-import { slugify } from '@/lib/utils/slugify';
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { requireAdminSession } from "@/lib/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { ProductFormSchema, ProductIdSchema } from "@/lib/validations/product";
+import { slugify } from "@/lib/utils/slugify";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export interface ActionState {
   success?: boolean;
@@ -14,42 +14,127 @@ export interface ActionState {
 }
 
 /**
+ * Ensures 'products' bucket exists and is public in Supabase
+ */
+let isBucketReady = false;
+async function ensureProductsBucket(
+  supabase: ReturnType<typeof createAdminClient>,
+) {
+  if (isBucketReady) return;
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = buckets?.some((b) => b.name === "products");
+    if (!exists) {
+      await supabase.storage.createBucket("products", {
+        public: true,
+        fileSizeLimit: 20971520, // 20MB
+      });
+    }
+    isBucketReady = true;
+  } catch (err) {
+    console.warn("Auto-verify products bucket error:", err);
+  }
+}
+
+/**
  * Uploads a file to Supabase storage bucket 'products'
  */
 async function uploadProductFile(
   supabase: ReturnType<typeof createAdminClient>,
-  file: File
+  file: File,
 ): Promise<string> {
-  const fileExt = file.name.split('.').pop() || 'jpg';
+  await ensureProductsBucket(supabase);
+
+  const fileExt =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "jpg";
   const cleanFileName = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const { error: uploadError } = await supabase.storage
-    .from('products')
+  let { error: uploadError } = await supabase.storage
+    .from("products")
     .upload(cleanFileName, buffer, {
-      contentType: file.type || 'image/jpeg',
+      contentType: file.type || "image/jpeg",
       upsert: true,
     });
 
+  // If upload failed because bucket was not found, attempt to create and retry
+  if (
+    uploadError &&
+    (uploadError.message?.toLowerCase().includes("bucket") ||
+      (uploadError as { statusCode?: number }).statusCode === 404)
+  ) {
+    try {
+      await supabase.storage.createBucket("products", { public: true });
+      const retry = await supabase.storage
+        .from("products")
+        .upload(cleanFileName, buffer, {
+          contentType: file.type || "image/jpeg",
+          upsert: true,
+        });
+      uploadError = retry.error;
+    } catch {
+      // ignore
+    }
+  }
+
   if (uploadError) {
-    console.error('Storage upload error:', uploadError);
+    console.error("Storage upload error:", uploadError);
     throw new Error(`فشل رفع الصورة: ${uploadError.message}`);
   }
 
   const { data: publicUrlData } = supabase.storage
-    .from('products')
+    .from("products")
     .getPublicUrl(cleanFileName);
 
   return publicUrlData.publicUrl;
 }
 
 /**
+ * Reconstructs gallery images in the exact order selected by the user
+ */
+function reconstructGallery(
+  galleryOrderRaw: FormDataEntryValue | null,
+  retainedImages: string[],
+  uploadedUrls: string[],
+): string[] {
+  if (galleryOrderRaw && typeof galleryOrderRaw === "string") {
+    try {
+      const order = JSON.parse(galleryOrderRaw) as Array<{
+        type: "existing" | "new";
+        url?: string;
+        index?: number;
+      }>;
+      const result: string[] = [];
+      for (const item of order) {
+        if (item.type === "existing" && item.url) {
+          result.push(item.url);
+        } else if (
+          item.type === "new" &&
+          typeof item.index === "number" &&
+          uploadedUrls[item.index]
+        ) {
+          result.push(uploadedUrls[item.index]);
+        }
+      }
+      if (result.length > 0) return result;
+    } catch {
+      // fallback
+    }
+  }
+  return [...retainedImages, ...uploadedUrls];
+}
+
+/**
  * Helper to parse JSON fields safely
  */
 function safeJsonParse<T>(val: FormDataEntryValue | null, fallback: T): T {
-  if (!val || typeof val !== 'string') return fallback;
+  if (!val || typeof val !== "string") return fallback;
   try {
     return JSON.parse(val) as T;
   } catch {
@@ -62,29 +147,33 @@ function safeJsonParse<T>(val: FormDataEntryValue | null, fallback: T): T {
  */
 export async function createProduct(
   prevState: ActionState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdminSession();
 
   const rawData = {
-    name: formData.get('name'),
-    slug: formData.get('slug'),
-    brand: formData.get('brand'),
-    category: formData.get('category'),
-    description: formData.get('description'),
-    price: formData.get('price'),
-    compare_at_price: formData.get('compare_at_price'),
-    stock: formData.get('stock'),
-    available_branches: formData.get('available_branches') || 'all',
-    is_featured: formData.get('is_featured') === 'true' || formData.get('is_featured') === 'on',
-    is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
+    name: formData.get("name"),
+    slug: formData.get("slug"),
+    brand: formData.get("brand"),
+    category: formData.get("category"),
+    description: formData.get("description"),
+    price: formData.get("price"),
+    compare_at_price: formData.get("compare_at_price"),
+    stock: formData.get("stock"),
+    available_branches: formData.get("available_branches") || "all",
+    is_featured:
+      formData.get("is_featured") === "true" ||
+      formData.get("is_featured") === "on",
+    is_active:
+      formData.get("is_active") === "true" ||
+      formData.get("is_active") === "on",
   };
 
   const parsed = ProductFormSchema.safeParse(rawData);
   if (!parsed.success) {
     return {
       success: false,
-      error: 'يرجى مراجعة وتصحيح الحقول المطلوبة.',
+      error: "يرجى مراجعة وتصحيح الحقول المطلوبة.",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -92,15 +181,17 @@ export async function createProduct(
   const supabase = createAdminClient();
 
   // Generate unique slug
-  let finalSlug = parsed.data.slug ? slugify(parsed.data.slug) : slugify(parsed.data.name);
+  let finalSlug = parsed.data.slug
+    ? slugify(parsed.data.slug)
+    : slugify(parsed.data.name);
   if (!finalSlug) {
     finalSlug = `product-${Date.now()}`;
   }
 
   const { data: existingProduct } = await supabase
-    .from('products')
-    .select('id')
-    .eq('slug', finalSlug)
+    .from("products")
+    .select("id")
+    .eq("slug", finalSlug)
     .maybeSingle();
 
   if (existingProduct) {
@@ -108,7 +199,7 @@ export async function createProduct(
   }
 
   // Handle multiple image uploads
-  const imageFiles = formData.getAll('gallery_files') as File[];
+  const imageFiles = formData.getAll("gallery_files") as File[];
   const uploadedUrls: string[] = [];
 
   for (const file of imageFiles) {
@@ -119,21 +210,29 @@ export async function createProduct(
       } catch (err: unknown) {
         return {
           success: false,
-          error: (err as Error).message || 'حدث خطأ أثناء رفع صور المنتج.',
+          error: (err as Error).message || "حدث خطأ أثناء رفع صور المنتج.",
         };
       }
     }
   }
 
   // Retained existing images (if any)
-  const retainedImages = safeJsonParse<string[]>(formData.get('retained_gallery_images'), []);
-  const allGalleryImages = [...retainedImages, ...uploadedUrls];
-  const primaryImageUrl = allGalleryImages.length > 0 ? allGalleryImages[0] : null;
+  const retainedImages = safeJsonParse<string[]>(
+    formData.get("retained_gallery_images"),
+    [],
+  );
+  const allGalleryImages = reconstructGallery(
+    formData.get("gallery_order"),
+    retainedImages,
+    uploadedUrls,
+  );
+  const primaryImageUrl =
+    allGalleryImages.length > 0 ? allGalleryImages[0] : null;
 
   // Parse JSON/Array fields
-  const colors = safeJsonParse(formData.get('colors'), null);
-  const specs = safeJsonParse(formData.get('specs'), null);
-  const highlights = safeJsonParse(formData.get('highlights'), null);
+  const colors = safeJsonParse(formData.get("colors"), null);
+  const specs = safeJsonParse(formData.get("specs"), null);
+  const highlights = safeJsonParse(formData.get("highlights"), null);
 
   const newProductData = {
     name: parsed.data.name,
@@ -154,21 +253,23 @@ export async function createProduct(
     is_active: parsed.data.is_active,
   };
 
-  const { error: insertError } = await supabase.from('products').insert(newProductData);
+  const { error: insertError } = await supabase
+    .from("products")
+    .insert(newProductData);
 
   if (insertError) {
-    console.error('Failed to create product:', insertError);
+    console.error("Failed to create product:", insertError);
     return {
       success: false,
       error: `فشل حفظ المنتج: ${insertError.message}`,
     };
   }
 
-  revalidatePath('/admin/products');
-  revalidatePath('/products');
-  revalidatePath('/');
-  revalidatePath('/categories');
-  redirect('/admin/products');
+  revalidatePath("/admin/products");
+  revalidatePath("/products");
+  revalidatePath("/");
+  revalidatePath("/categories");
+  redirect("/admin/products");
 }
 
 /**
@@ -177,34 +278,38 @@ export async function createProduct(
 export async function updateProduct(
   productId: string,
   prevState: ActionState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdminSession();
 
   const idValidation = ProductIdSchema.safeParse(productId);
   if (!idValidation.success) {
-    return { success: false, error: 'معرف المنتج غير صالح.' };
+    return { success: false, error: "معرف المنتج غير صالح." };
   }
 
   const rawData = {
-    name: formData.get('name'),
-    slug: formData.get('slug'),
-    brand: formData.get('brand'),
-    category: formData.get('category'),
-    description: formData.get('description'),
-    price: formData.get('price'),
-    compare_at_price: formData.get('compare_at_price'),
-    stock: formData.get('stock'),
-    available_branches: formData.get('available_branches') || 'all',
-    is_featured: formData.get('is_featured') === 'true' || formData.get('is_featured') === 'on',
-    is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
+    name: formData.get("name"),
+    slug: formData.get("slug"),
+    brand: formData.get("brand"),
+    category: formData.get("category"),
+    description: formData.get("description"),
+    price: formData.get("price"),
+    compare_at_price: formData.get("compare_at_price"),
+    stock: formData.get("stock"),
+    available_branches: formData.get("available_branches") || "all",
+    is_featured:
+      formData.get("is_featured") === "true" ||
+      formData.get("is_featured") === "on",
+    is_active:
+      formData.get("is_active") === "true" ||
+      formData.get("is_active") === "on",
   };
 
   const parsed = ProductFormSchema.safeParse(rawData);
   if (!parsed.success) {
     return {
       success: false,
-      error: 'يرجى مراجعة وتصحيح الحقول المطلوبة.',
+      error: "يرجى مراجعة وتصحيح الحقول المطلوبة.",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -212,16 +317,19 @@ export async function updateProduct(
   const supabase = createAdminClient();
 
   const { data: currentProduct } = await supabase
-    .from('products')
-    .select('*')
-    .eq('id', productId)
+    .from("products")
+    .select("*")
+    .eq("id", productId)
     .single();
 
-  let finalSlug = parsed.data.slug ? slugify(parsed.data.slug) : slugify(parsed.data.name);
-  if (!finalSlug) finalSlug = currentProduct?.slug || `product-${productId.substring(0, 8)}`;
+  let finalSlug = parsed.data.slug
+    ? slugify(parsed.data.slug)
+    : slugify(parsed.data.name);
+  if (!finalSlug)
+    finalSlug = currentProduct?.slug || `product-${productId.substring(0, 8)}`;
 
   // Handle multiple image uploads
-  const imageFiles = formData.getAll('gallery_files') as File[];
+  const imageFiles = formData.getAll("gallery_files") as File[];
   const newlyUploadedUrls: string[] = [];
 
   for (const file of imageFiles) {
@@ -232,7 +340,7 @@ export async function updateProduct(
       } catch (err: unknown) {
         return {
           success: false,
-          error: (err as Error).message || 'حدث خطأ أثناء رفع صور المنتج.',
+          error: (err as Error).message || "حدث خطأ أثناء رفع صور المنتج.",
         };
       }
     }
@@ -240,17 +348,32 @@ export async function updateProduct(
 
   // Retained existing images
   const retainedImages = safeJsonParse<string[]>(
-    formData.get('retained_gallery_images'),
-    currentProduct?.gallery_images || (currentProduct?.image_url ? [currentProduct.image_url] : [])
+    formData.get("retained_gallery_images"),
+    currentProduct?.gallery_images ||
+      (currentProduct?.image_url ? [currentProduct.image_url] : []),
   );
 
-  const allGalleryImages = [...retainedImages, ...newlyUploadedUrls];
-  const primaryImageUrl = allGalleryImages.length > 0 ? allGalleryImages[0] : null;
+  const allGalleryImages = reconstructGallery(
+    formData.get("gallery_order"),
+    retainedImages,
+    newlyUploadedUrls,
+  );
+  const primaryImageUrl =
+    allGalleryImages.length > 0 ? allGalleryImages[0] : null;
 
   // Parse JSON/Array fields
-  const colors = safeJsonParse(formData.get('colors'), currentProduct?.colors || null);
-  const specs = safeJsonParse(formData.get('specs'), currentProduct?.specs || null);
-  const highlights = safeJsonParse(formData.get('highlights'), currentProduct?.highlights || null);
+  const colors = safeJsonParse(
+    formData.get("colors"),
+    currentProduct?.colors || null,
+  );
+  const specs = safeJsonParse(
+    formData.get("specs"),
+    currentProduct?.specs || null,
+  );
+  const highlights = safeJsonParse(
+    formData.get("highlights"),
+    currentProduct?.highlights || null,
+  );
 
   const updatedData = {
     name: parsed.data.name,
@@ -273,25 +396,25 @@ export async function updateProduct(
   };
 
   const { error: updateError } = await supabase
-    .from('products')
+    .from("products")
     .update(updatedData)
-    .eq('id', productId);
+    .eq("id", productId);
 
   if (updateError) {
-    console.error('Failed to update product:', updateError);
+    console.error("Failed to update product:", updateError);
     return {
       success: false,
       error: `فشل تعديل المنتج: ${updateError.message}`,
     };
   }
 
-  revalidatePath('/admin/products');
+  revalidatePath("/admin/products");
   revalidatePath(`/products/${finalSlug}`);
   revalidatePath(`/products/${productId}`);
-  revalidatePath('/products');
-  revalidatePath('/');
-  revalidatePath('/categories');
-  redirect('/admin/products');
+  revalidatePath("/products");
+  revalidatePath("/");
+  revalidatePath("/categories");
+  redirect("/admin/products");
 }
 
 /**
@@ -299,22 +422,25 @@ export async function updateProduct(
  */
 export async function toggleProductActive(
   productId: string,
-  currentState: boolean
+  currentState: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
     const supabase = createAdminClient();
 
     const { error } = await supabase
-      .from('products')
-      .update({ is_active: !currentState, updated_at: new Date().toISOString() })
-      .eq('id', productId);
+      .from("products")
+      .update({
+        is_active: !currentState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", productId);
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
-    revalidatePath('/products');
-    revalidatePath('/');
+    revalidatePath("/admin/products");
+    revalidatePath("/products");
+    revalidatePath("/");
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -326,22 +452,25 @@ export async function toggleProductActive(
  */
 export async function toggleProductFeatured(
   productId: string,
-  currentState: boolean
+  currentState: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
     const supabase = createAdminClient();
 
     const { error } = await supabase
-      .from('products')
-      .update({ is_featured: !currentState, updated_at: new Date().toISOString() })
-      .eq('id', productId);
+      .from("products")
+      .update({
+        is_featured: !currentState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", productId);
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
-    revalidatePath('/products');
-    revalidatePath('/');
+    revalidatePath("/admin/products");
+    revalidatePath("/products");
+    revalidatePath("/");
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -351,18 +480,23 @@ export async function toggleProductFeatured(
 /**
  * Delete a product
  */
-export async function deleteProduct(productId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteProduct(
+  productId: string,
+): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
     const supabase = createAdminClient();
 
-    const { error } = await supabase.from('products').delete().eq('id', productId);
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", productId);
     if (error) throw error;
 
-    revalidatePath('/admin/products');
-    revalidatePath('/products');
-    revalidatePath('/');
-    revalidatePath('/categories');
+    revalidatePath("/admin/products");
+    revalidatePath("/products");
+    revalidatePath("/");
+    revalidatePath("/categories");
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };

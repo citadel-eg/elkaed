@@ -1,10 +1,10 @@
-'use server';
+"use server";
 
-import { requireAdminSession } from '@/lib/auth/session';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import { requireAdminSession } from "@/lib/auth/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
 
 export interface ActionState {
   success?: boolean;
@@ -13,43 +13,102 @@ export interface ActionState {
 }
 
 const TeamMemberSchema = z.object({
-  name: z.string().trim().min(1, 'اسم العضو مطلوب'),
-  role: z.string().trim().min(1, 'المسمى الوظيفي مطلوب'),
-  bio: z.string().trim().optional().transform((val) => val || null),
+  name: z.string().trim().min(1, "اسم العضو مطلوب"),
+  role: z.string().trim().min(1, "المسمى الوظيفي مطلوب"),
+  bio: z
+    .string()
+    .trim()
+    .optional()
+    .transform((val) => val || null),
   display_order: z.coerce.number().int().default(0),
   is_active: z.preprocess(
-    (val) => val === true || val === 'true' || val === 'on' || val === 1 || val === '1',
-    z.boolean().default(true)
+    (val) =>
+      val === true ||
+      val === "true" ||
+      val === "on" ||
+      val === 1 ||
+      val === "1",
+    z.boolean().default(true),
   ),
 });
+
+/**
+ * Ensures 'team' bucket exists and is public in Supabase
+ */
+let isTeamBucketReady = false;
+async function ensureTeamBucket(
+  supabase: ReturnType<typeof createAdminClient>,
+) {
+  if (isTeamBucketReady) return;
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = buckets?.some((b) => b.name === "team");
+    if (!exists) {
+      await supabase.storage.createBucket("team", {
+        public: true,
+        fileSizeLimit: 10485760, // 10MB
+      });
+    }
+    isTeamBucketReady = true;
+  } catch (err) {
+    console.warn("Auto-verify team bucket error:", err);
+  }
+}
 
 /**
  * Upload team avatar to Supabase Storage 'team' bucket
  */
 async function uploadTeamAvatar(
   supabase: ReturnType<typeof createAdminClient>,
-  file: File
+  file: File,
 ): Promise<string> {
-  const fileExt = file.name.split('.').pop() || 'png';
+  await ensureTeamBucket(supabase);
+
+  const fileExt =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "png";
   const cleanFileName = `avatar-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const { error: uploadError } = await supabase.storage
-    .from('team')
+  let { error: uploadError } = await supabase.storage
+    .from("team")
     .upload(cleanFileName, buffer, {
-      contentType: file.type || 'image/png',
+      contentType: file.type || "image/png",
       upsert: true,
     });
 
+  // Retry creating bucket if not found
+  if (
+    uploadError &&
+    (uploadError.message?.toLowerCase().includes("bucket") ||
+      (uploadError as { statusCode?: number }).statusCode === 404)
+  ) {
+    try {
+      await supabase.storage.createBucket("team", { public: true });
+      const retry = await supabase.storage
+        .from("team")
+        .upload(cleanFileName, buffer, {
+          contentType: file.type || "image/png",
+          upsert: true,
+        });
+      uploadError = retry.error;
+    } catch {
+      // ignore
+    }
+  }
+
   if (uploadError) {
-    console.error('Storage upload error:', uploadError);
+    console.error("Storage upload error:", uploadError);
     throw new Error(`فشل رفع الصورة: ${uploadError.message}`);
   }
 
   const { data: publicUrlData } = supabase.storage
-    .from('team')
+    .from("team")
     .getPublicUrl(cleanFileName);
 
   return publicUrlData.publicUrl;
@@ -60,23 +119,25 @@ async function uploadTeamAvatar(
  */
 export async function createTeamMember(
   prevState: ActionState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdminSession();
 
   const rawData = {
-    name: formData.get('name'),
-    role: formData.get('role'),
-    bio: formData.get('bio'),
-    display_order: formData.get('display_order'),
-    is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
+    name: formData.get("name"),
+    role: formData.get("role"),
+    bio: formData.get("bio"),
+    display_order: formData.get("display_order"),
+    is_active:
+      formData.get("is_active") === "true" ||
+      formData.get("is_active") === "on",
   };
 
   const parsed = TeamMemberSchema.safeParse(rawData);
   if (!parsed.success) {
     return {
       success: false,
-      error: 'يرجى مراجعة الحقول المطلوبة.',
+      error: "يرجى مراجعة الحقول المطلوبة.",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -84,8 +145,9 @@ export async function createTeamMember(
   const supabase = createAdminClient();
 
   // Handle avatar upload or URL
-  let imageUrl: string | null = (formData.get('image_url_text') as string) || null;
-  const imageFile = formData.get('image_file') as File | null;
+  let imageUrl: string | null =
+    (formData.get("image_url_text") as string) || null;
+  const imageFile = formData.get("image_file") as File | null;
 
   if (imageFile && imageFile.size > 0) {
     try {
@@ -93,7 +155,7 @@ export async function createTeamMember(
     } catch (err: unknown) {
       return {
         success: false,
-        error: (err as Error).message || 'حدث خطأ أثناء رفع صورة عضو الفريق.',
+        error: (err as Error).message || "حدث خطأ أثناء رفع صورة عضو الفريق.",
       };
     }
   }
@@ -107,19 +169,21 @@ export async function createTeamMember(
     is_active: parsed.data.is_active,
   };
 
-  const { error: insertError } = await supabase.from('team_members').insert(newMember);
+  const { error: insertError } = await supabase
+    .from("team_members")
+    .insert(newMember);
 
   if (insertError) {
-    console.error('Failed to create team member:', insertError);
+    console.error("Failed to create team member:", insertError);
     return {
       success: false,
       error: `فشل إضافة عضو الفريق: ${insertError.message}`,
     };
   }
 
-  revalidatePath('/admin/team');
-  revalidatePath('/about');
-  redirect('/admin/team');
+  revalidatePath("/admin/team");
+  revalidatePath("/about");
+  redirect("/admin/team");
 }
 
 /**
@@ -128,23 +192,25 @@ export async function createTeamMember(
 export async function updateTeamMember(
   memberId: string,
   prevState: ActionState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdminSession();
 
   const rawData = {
-    name: formData.get('name'),
-    role: formData.get('role'),
-    bio: formData.get('bio'),
-    display_order: formData.get('display_order'),
-    is_active: formData.get('is_active') === 'true' || formData.get('is_active') === 'on',
+    name: formData.get("name"),
+    role: formData.get("role"),
+    bio: formData.get("bio"),
+    display_order: formData.get("display_order"),
+    is_active:
+      formData.get("is_active") === "true" ||
+      formData.get("is_active") === "on",
   };
 
   const parsed = TeamMemberSchema.safeParse(rawData);
   if (!parsed.success) {
     return {
       success: false,
-      error: 'يرجى مراجعة الحقول المطلوبة.',
+      error: "يرجى مراجعة الحقول المطلوبة.",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -152,13 +218,16 @@ export async function updateTeamMember(
   const supabase = createAdminClient();
 
   const { data: currentMember } = await supabase
-    .from('team_members')
-    .select('*')
-    .eq('id', memberId)
+    .from("team_members")
+    .select("*")
+    .eq("id", memberId)
     .single();
 
-  let imageUrl: string | null = (formData.get('image_url_text') as string) || currentMember?.image_url || null;
-  const imageFile = formData.get('image_file') as File | null;
+  let imageUrl: string | null =
+    (formData.get("image_url_text") as string) ||
+    currentMember?.image_url ||
+    null;
+  const imageFile = formData.get("image_file") as File | null;
 
   if (imageFile && imageFile.size > 0) {
     try {
@@ -166,7 +235,7 @@ export async function updateTeamMember(
     } catch (err: unknown) {
       return {
         success: false,
-        error: (err as Error).message || 'حدث خطأ أثناء رفع صورة عضو الفريق.',
+        error: (err as Error).message || "حدث خطأ أثناء رفع صورة عضو الفريق.",
       };
     }
   }
@@ -182,21 +251,21 @@ export async function updateTeamMember(
   };
 
   const { error: updateError } = await supabase
-    .from('team_members')
+    .from("team_members")
     .update(updatedData)
-    .eq('id', memberId);
+    .eq("id", memberId);
 
   if (updateError) {
-    console.error('Failed to update team member:', updateError);
+    console.error("Failed to update team member:", updateError);
     return {
       success: false,
       error: `فشل تعديل بيانات عضو الفريق: ${updateError.message}`,
     };
   }
 
-  revalidatePath('/admin/team');
-  revalidatePath('/about');
-  redirect('/admin/team');
+  revalidatePath("/admin/team");
+  revalidatePath("/about");
+  redirect("/admin/team");
 }
 
 /**
@@ -204,21 +273,24 @@ export async function updateTeamMember(
  */
 export async function toggleTeamMemberActive(
   memberId: string,
-  currentState: boolean
+  currentState: boolean,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
     const supabase = createAdminClient();
 
     const { error } = await supabase
-      .from('team_members')
-      .update({ is_active: !currentState, updated_at: new Date().toISOString() })
-      .eq('id', memberId);
+      .from("team_members")
+      .update({
+        is_active: !currentState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", memberId);
 
     if (error) throw error;
 
-    revalidatePath('/admin/team');
-    revalidatePath('/about');
+    revalidatePath("/admin/team");
+    revalidatePath("/about");
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -228,16 +300,21 @@ export async function toggleTeamMemberActive(
 /**
  * Delete a team member
  */
-export async function deleteTeamMember(memberId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteTeamMember(
+  memberId: string,
+): Promise<{ success: boolean; error?: string }> {
   try {
     await requireAdminSession();
     const supabase = createAdminClient();
 
-    const { error } = await supabase.from('team_members').delete().eq('id', memberId);
+    const { error } = await supabase
+      .from("team_members")
+      .delete()
+      .eq("id", memberId);
     if (error) throw error;
 
-    revalidatePath('/admin/team');
-    revalidatePath('/about');
+    revalidatePath("/admin/team");
+    revalidatePath("/about");
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };

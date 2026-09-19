@@ -1,10 +1,14 @@
-'use client';
+"use client";
 
-import { useActionState, useState } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { createProduct, updateProduct, type ActionState } from '@/app/admin/products/actions';
-import type { Product, ProductColor } from '@/types/product';
+import { useActionState, useState, startTransition } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  createProduct,
+  updateProduct,
+  type ActionState,
+} from "@/app/admin/products/actions";
+import type { Product, ProductColor } from "@/types/product";
 
 interface ProductFormProps {
   product?: Product;
@@ -20,14 +24,13 @@ interface ImageItem {
 }
 
 export function ProductForm({ product, isEditing = false }: ProductFormProps) {
-  const actionFunction = isEditing && product
-    ? updateProduct.bind(null, product.id)
-    : createProduct;
+  const actionFunction =
+    isEditing && product ? updateProduct.bind(null, product.id) : createProduct;
 
-  const [state, formAction, isPending] = useActionState<ActionState | null, FormData>(
-    actionFunction,
-    null
-  );
+  const [state, formAction, isPending] = useActionState<
+    ActionState | null,
+    FormData
+  >(actionFunction, null);
 
   // Initial images from product
   const initialImages: ImageItem[] = (() => {
@@ -40,34 +43,43 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
       }));
     }
     if (product?.image_url) {
-      return [{
-        id: 'existing-0',
-        url: product.image_url,
-        previewUrl: product.image_url,
-        isExisting: true,
-      }];
+      return [
+        {
+          id: "existing-0",
+          url: product.image_url,
+          previewUrl: product.image_url,
+          isExisting: true,
+        },
+      ];
     }
     return [];
   })();
 
   const [imageList, setImageList] = useState<ImageItem[]>(initialImages);
+  const [imageUrlInput, setImageUrlInput] = useState("");
 
   // State for Colors
   const [colors, setColors] = useState<ProductColor[]>(product?.colors || []);
-  const [newColorName, setNewColorName] = useState('');
-  const [newColorHex, setNewColorHex] = useState('#2C2A28');
+  const [newColorName, setNewColorName] = useState("");
+  const [newColorHex, setNewColorHex] = useState("#2C2A28");
 
   // State for Specs (Key-Value)
   const initialSpecs = product?.specs
-    ? Object.entries(product.specs).map(([label, value]) => ({ label, value: String(value) }))
+    ? Object.entries(product.specs).map(([label, value]) => ({
+        label,
+        value: String(value),
+      }))
     : [];
-  const [specsList, setSpecsList] = useState<{ label: string; value: string }[]>(initialSpecs);
-  const [newSpecLabel, setNewSpecLabel] = useState('');
-  const [newSpecValue, setNewSpecValue] = useState('');
+  const [specsList, setSpecsList] =
+    useState<{ label: string; value: string }[]>(initialSpecs);
+  const [newSpecLabel, setNewSpecLabel] = useState("");
+  const [newSpecValue, setNewSpecValue] = useState("");
 
   // State for Highlights
-  const [highlights, setHighlights] = useState<string[]>(product?.highlights || []);
-  const [newHighlight, setNewHighlight] = useState('');
+  const [highlights, setHighlights] = useState<string[]>(
+    product?.highlights || [],
+  );
+  const [newHighlight, setNewHighlight] = useState("");
 
   // Handle Multi-file selection
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,15 +87,32 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
     if (!files || files.length === 0) return;
 
     const newItems: ImageItem[] = Array.from(files).map((file, idx) => ({
-      id: `new-${Date.now()}-${idx}`,
+      id: `new-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
       file,
       previewUrl: URL.createObjectURL(file),
       isExisting: false,
     }));
 
     setImageList((prev) => [...prev, ...newItems]);
-    // Reset file input value so user can add more if needed
-    e.target.value = '';
+    // Reset file input value so user can pick again if needed
+    e.target.value = "";
+  };
+
+  const addImageUrl = () => {
+    const trimmed = imageUrlInput.trim();
+    if (!trimmed) return;
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      alert("يرجى إدخال رابط يبدأ بـ http:// أو https://");
+      return;
+    }
+    const newItem: ImageItem = {
+      id: `url-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      url: trimmed,
+      previewUrl: trimmed,
+      isExisting: true,
+    };
+    setImageList((prev) => [...prev, newItem]);
+    setImageUrlInput("");
   };
 
   const removeImage = (index: number) => {
@@ -102,7 +131,7 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
   const addColor = () => {
     if (!newColorName.trim()) return;
     setColors([...colors, { name: newColorName.trim(), hex: newColorHex }]);
-    setNewColorName('');
+    setNewColorName("");
   };
 
   const removeColor = (index: number) => {
@@ -111,9 +140,12 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
 
   const addSpec = () => {
     if (!newSpecLabel.trim() || !newSpecValue.trim()) return;
-    setSpecsList([...specsList, { label: newSpecLabel.trim(), value: newSpecValue.trim() }]);
-    setNewSpecLabel('');
-    setNewSpecValue('');
+    setSpecsList([
+      ...specsList,
+      { label: newSpecLabel.trim(), value: newSpecValue.trim() },
+    ]);
+    setNewSpecLabel("");
+    setNewSpecValue("");
   };
 
   const removeSpec = (index: number) => {
@@ -123,30 +155,73 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
   const addHighlight = () => {
     if (!newHighlight.trim()) return;
     setHighlights([...highlights, newHighlight.trim()]);
-    setNewHighlight('');
+    setNewHighlight("");
   };
 
   const removeHighlight = (index: number) => {
     setHighlights(highlights.filter((_, i) => i !== index));
   };
 
-  const specsObject = specsList.reduce((acc, curr) => {
-    acc[curr.label] = curr.value;
-    return acc;
-  }, {} as Record<string, string>);
+  const specsObject = specsList.reduce(
+    (acc, curr) => {
+      acc[curr.label] = curr.value;
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
 
-  // Retained existing image URLs
-  const retainedExistingUrls = imageList
-    .filter((item) => item.isExisting && item.url)
-    .map((item) => item.url as string);
+  const handleFormSubmit = (formData: FormData) => {
+    // Clear out any default input values
+    formData.delete("gallery_files");
+    formData.delete("retained_gallery_images");
+    formData.delete("gallery_order");
+
+    let fileCounter = 0;
+    const galleryOrder: Array<{
+      type: "existing" | "new";
+      url?: string;
+      index?: number;
+    }> = [];
+
+    for (const item of imageList) {
+      if (item.file) {
+        formData.append("gallery_files", item.file);
+        galleryOrder.push({ type: "new", index: fileCounter });
+        fileCounter++;
+      } else if (item.url) {
+        galleryOrder.push({ type: "existing", url: item.url });
+      }
+    }
+
+    formData.append("gallery_order", JSON.stringify(galleryOrder));
+
+    const retainedExistingUrls = imageList
+      .filter((item) => !item.file && item.url)
+      .map((item) => item.url as string);
+    formData.append(
+      "retained_gallery_images",
+      JSON.stringify(retainedExistingUrls),
+    );
+
+    startTransition(() => {
+      formAction(formData);
+    });
+  };
 
   return (
-    <form action={formAction} className="space-y-6 max-w-4xl text-start" dir="rtl">
+    <form
+      action={handleFormSubmit}
+      className="space-y-6 max-w-4xl text-start"
+      dir="rtl"
+    >
       {/* Hidden inputs to pass data */}
       <input type="hidden" name="colors" value={JSON.stringify(colors)} />
       <input type="hidden" name="specs" value={JSON.stringify(specsObject)} />
-      <input type="hidden" name="highlights" value={JSON.stringify(highlights)} />
-      <input type="hidden" name="retained_gallery_images" value={JSON.stringify(retainedExistingUrls)} />
+      <input
+        type="hidden"
+        name="highlights"
+        value={JSON.stringify(highlights)}
+      />
 
       {/* Error Alert */}
       {state?.error && (
@@ -166,7 +241,10 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5 sm:col-span-2">
-            <label htmlFor="name" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="name"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               اسم المنتج *
             </label>
             <input
@@ -174,21 +252,24 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               name="name"
               type="text"
               required
-              defaultValue={product?.name || ''}
+              defaultValue={product?.name || ""}
               placeholder="مثال: iPhone 16 Pro"
               className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="slug" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="slug"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               الرابط الدائم (Slug)
             </label>
             <input
               id="slug"
               name="slug"
               type="text"
-              defaultValue={product?.slug || ''}
+              defaultValue={product?.slug || ""}
               placeholder="يُنشأ تلقائيًا من الاسم إذا تُرك فارغًا"
               className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors font-mono text-xs"
               dir="ltr"
@@ -196,27 +277,33 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="brand" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="brand"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               العلامة التجارية (Brand)
             </label>
             <input
               id="brand"
               name="brand"
               type="text"
-              defaultValue={product?.brand || ''}
+              defaultValue={product?.brand || ""}
               placeholder="مثال: Apple, Samsung, Anker"
               className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="category" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="category"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               القسم (Category)
             </label>
             <select
               id="category"
               name="category"
-              defaultValue={product?.category || 'smartphones'}
+              defaultValue={product?.category || "smartphones"}
               className="w-full h-11 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors cursor-pointer"
             >
               <option value="smartphones">الهواتف الذكية (smartphones)</option>
@@ -224,24 +311,33 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               <option value="tablets">التابلت (tablets)</option>
               <option value="wearables">الساعات الذكية (wearables)</option>
               <option value="audio">السماعات (audio)</option>
-              <option value="accessories">إكسسوارات الهواتف (accessories)</option>
+              <option value="accessories">
+                إكسسوارات الهواتف (accessories)
+              </option>
               <option value="chargers">الشواحن (chargers)</option>
               <option value="cables">الكابلات (cables)</option>
               <option value="powerbanks">الباور بانك (powerbanks)</option>
               <option value="cases">حافظات الهواتف (cases)</option>
-              <option value="screen-protectors">واقيات الشاشة (screen-protectors)</option>
-              <option value="laptop-accessories">إكسسوارات اللابتوب (laptop-accessories)</option>
+              <option value="screen-protectors">
+                واقيات الشاشة (screen-protectors)
+              </option>
+              <option value="laptop-accessories">
+                إكسسوارات اللابتوب (laptop-accessories)
+              </option>
             </select>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="available_branches" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="available_branches"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               توفر المنتج في الفروع
             </label>
             <select
               id="available_branches"
               name="available_branches"
-              defaultValue={product?.available_branches || 'all'}
+              defaultValue={product?.available_branches || "all"}
               className="w-full h-11 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors cursor-pointer"
             >
               <option value="all">كافة الفروع (المحلة وسمنود)</option>
@@ -251,14 +347,17 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <label htmlFor="description" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="description"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               وصف المنتج
             </label>
             <textarea
               id="description"
               name="description"
               rows={3}
-              defaultValue={product?.description || ''}
+              defaultValue={product?.description || ""}
               placeholder="نبذة مختصرة ومواصفات تسويقية للمنتج..."
               className="w-full p-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
@@ -274,7 +373,10 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <label htmlFor="price" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="price"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               سعر البيع (ج.م) *
             </label>
             <input
@@ -283,14 +385,17 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               type="number"
               step="0.01"
               required
-              defaultValue={product?.price || ''}
+              defaultValue={product?.price || ""}
               placeholder="69900"
               className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="compare_at_price" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="compare_at_price"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               السعر قبل الخصم (ج.م)
             </label>
             <input
@@ -298,14 +403,17 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               name="compare_at_price"
               type="number"
               step="0.01"
-              defaultValue={product?.compare_at_price || ''}
+              defaultValue={product?.compare_at_price || ""}
               placeholder="74000"
               className="w-full h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-sm text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="stock" className="block font-alexandria font-semibold text-xs text-[#1F1F1F]">
+            <label
+              htmlFor="stock"
+              className="block font-alexandria font-semibold text-xs text-[#1F1F1F]"
+            >
               المخزون المتوفر (قطع) *
             </label>
             <input
@@ -329,12 +437,14 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               3. صور المنتج ومعرض الصور
             </h2>
             <p className="font-alexandria text-xs text-muted-text mt-0.5">
-              الصورة الأولى تمثل الغلاف الرئيسي في المتجر. يمكنك السحب أو الضغط لإضافة عدة زوايا للمنتج.
+              الصورة الأولى تمثل الغلاف الرئيسي في المتجر. يمكنك السحب أو الضغط
+              لإضافة عدة زوايا للمنتج.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-alexandria font-bold text-xs px-3 py-1 rounded-full bg-gold/10 text-gold-dark border border-gold/20">
-              {imageList.length} {imageList.length === 1 ? 'صورة مختارة' : 'صور مختارة'}
+              {imageList.length}{" "}
+              {imageList.length === 1 ? "صورة مختارة" : "صور مختارة"}
             </span>
           </div>
         </div>
@@ -364,13 +474,17 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
                     الصورة المعروضة في بطاقة المنتج وقوائم البحث
                   </span>
                   <p className="font-alexandria text-xs text-[#1F1F1F] leading-relaxed">
-                    هذه هي الصورة التي يراها العميل كواجهة أساسية. يمكنك النقر على زر &quot;تعيين كرئيسية&quot; في أي من الصور بالأسفل لتغيير صورة الغلاف.
+                    هذه هي الصورة التي يراها العميل كواجهة أساسية. يمكنك النقر
+                    على زر &quot;تعيين كرئيسية&quot; في أي من الصور بالأسفل
+                    لتغيير صورة الغلاف.
                   </p>
                 </div>
                 <div className="pt-2 flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F2EEE8] font-alexandria text-[11px] text-muted-text">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    {imageList[0].isExisting ? 'صورة مخزنة بالسيرفر' : 'جاهزة للرفع'}
+                    {imageList[0].isExisting
+                      ? "صورة مخزنة بالسيرفر"
+                      : "جاهزة للرفع"}
                   </span>
                   <button
                     type="button"
@@ -439,7 +553,12 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
         {/* Dropzone Upload Button */}
         <label className="border-2 border-dashed border-[#DCD4CA] hover:border-gold rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center gap-3.5 cursor-pointer bg-[#FCFBF8] hover:bg-[#F9F6F0] transition-all text-center group">
           <div className="w-14 h-14 rounded-2xl bg-gold/10 text-gold group-hover:scale-110 group-hover:bg-gold group-hover:text-white transition-all flex items-center justify-center shadow-xs">
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="w-7 h-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -465,6 +584,27 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
             className="hidden"
           />
         </label>
+
+        {/* Or Direct Image URL Input */}
+        <div className="pt-2 border-t border-[#F2EEE8]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <input
+              type="url"
+              value={imageUrlInput}
+              onChange={(e) => setImageUrlInput(e.target.value)}
+              placeholder="أو أدخل رابط صورة مباشر (مثال: https://...)"
+              className="flex-1 h-11 px-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors"
+              dir="ltr"
+            />
+            <button
+              type="button"
+              onClick={addImageUrl}
+              className="h-11 px-5 bg-[#F2EEE8] hover:bg-gold hover:text-white text-[#1F1F1F] font-alexandria font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
+            >
+              + إضافة رابط الصورة
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 4. Colors Manager */}
@@ -480,7 +620,10 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               key={idx}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#F2EEE8] border border-[#DCD4CA] font-alexandria text-xs"
             >
-              <span className="w-3.5 h-3.5 rounded-full border border-black/10" style={{ backgroundColor: c.hex }} />
+              <span
+                className="w-3.5 h-3.5 rounded-full border border-black/10"
+                style={{ backgroundColor: c.hex }}
+              />
               <span className="font-semibold">{c.name}</span>
               <button
                 type="button"
@@ -528,7 +671,10 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
         {/* Existing Specs */}
         <div className="divide-y divide-[#F2EEE8]">
           {specsList.map((s, idx) => (
-            <div key={idx} className="py-2.5 flex items-center justify-between gap-4 font-alexandria text-xs">
+            <div
+              key={idx}
+              className="py-2.5 flex items-center justify-between gap-4 font-alexandria text-xs"
+            >
               <span className="font-bold text-[#1F1F1F]">{s.label}</span>
               <span className="text-muted-text">{s.value}</span>
               <button
@@ -577,7 +723,10 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
         {/* Existing Highlights */}
         <ul className="space-y-2">
           {highlights.map((h, idx) => (
-            <li key={idx} className="flex items-center justify-between gap-3 p-2 rounded-xl bg-[#FCFBF8] border border-border-light font-alexandria text-xs">
+            <li
+              key={idx}
+              className="flex items-center justify-between gap-3 p-2 rounded-xl bg-[#FCFBF8] border border-border-light font-alexandria text-xs"
+            >
               <div className="flex items-center gap-2">
                 <span className="text-gold font-bold">◆</span>
                 <span className="text-[#1F1F1F]">{h}</span>
@@ -669,7 +818,11 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
           disabled={isPending}
           className="h-12 px-8 rounded-2xl bg-gold hover:bg-gold-hover text-white font-alexandria font-bold text-xs shadow-md shadow-gold/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
         >
-          {isPending ? 'جاري الحفظ...' : isEditing ? 'تحديث المنتج' : 'حفظ ونشر المنتج'}
+          {isPending
+            ? "جاري الحفظ..."
+            : isEditing
+              ? "تحديث المنتج"
+              : "حفظ ونشر المنتج"}
         </button>
       </div>
     </form>
