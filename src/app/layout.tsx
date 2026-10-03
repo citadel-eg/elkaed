@@ -53,11 +53,14 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/images/logo.png', sizes: '32x32', type: 'image/png' },
-      { url: '/images/logo.png', sizes: '192x192', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    shortcut: '/images/logo.png',
-    apple: [{ url: '/images/logo.png', sizes: '180x180', type: 'image/png' }],
+    shortcut: '/favicon.ico',
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
     title: 'القائد للتقنية | هواتف، لابتوبات، وإكسسوارات أصلية معتمدة',
@@ -144,6 +147,7 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       className={`${alexandria.variable} ${marhey.variable} ${alexandria.className}`}
+      suppressHydrationWarning
     >
       <head>
         <script
@@ -151,7 +155,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-screen bg-[#FAF8F5] text-[#1F1F1F] font-sans antialiased selection:bg-gold selection:text-white">
+      <body
+        className="min-h-screen bg-[#FAF8F5] text-[#1F1F1F] font-sans antialiased selection:bg-gold selection:text-white"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

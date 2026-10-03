@@ -37,6 +37,7 @@ const CATEGORIES = [
   { id: 'cases', name: 'حافظات الهواتف' },
   { id: 'screen-protectors', name: 'واقيات الشاشة' },
   { id: 'laptop-accessories', name: 'إكسسوارات اللابتوب' },
+  { id: 'social-media-creator', name: 'أدوات صناعة المحتوى' },
 ];
 
 export function ProductsCatalog({

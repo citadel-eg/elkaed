@@ -393,6 +393,9 @@ export function ProductForm({ product, isEditing = false }: ProductFormProps) {
               <option value="laptop-accessories">
                 إكسسوارات اللابتوب (laptop-accessories)
               </option>
+              <option value="social-media-creator">
+                أدوات صناعة المحتوى (social-media-creator)
+              </option>
             </select>
           </div>
 

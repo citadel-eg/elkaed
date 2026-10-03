@@ -10,6 +10,22 @@ interface ProductTableProps {
   products: Product[];
 }
 
+const CATEGORY_NAMES: Record<string, string> = {
+  smartphones: 'الهواتف الذكية',
+  laptops: 'اللابتوبات',
+  tablets: 'التابلت',
+  wearables: 'الساعات الذكية',
+  audio: 'السماعات',
+  accessories: 'إكسسوارات الهواتف',
+  chargers: 'الشواحن',
+  cables: 'الكابلات',
+  powerbanks: 'الباور بانك',
+  cases: 'حافظات الهواتف',
+  'screen-protectors': 'واقيات الشاشة',
+  'laptop-accessories': 'إكسسوارات اللابتوب',
+  'social-media-creator': 'أدوات صناعة المحتوى',
+};
+
 export function ProductTable({ products }: ProductTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -87,7 +103,7 @@ export function ProductTable({ products }: ProductTableProps) {
             <option value="all">كافة الأقسام ({products.length})</option>
             {categories.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {CATEGORY_NAMES[c] || c}
               </option>
             ))}
           </select>
@@ -110,14 +126,14 @@ export function ProductTable({ products }: ProductTableProps) {
             <table className="w-full text-start border-collapse font-alexandria text-xs">
               <thead>
                 <tr className="bg-[#F8F5F0] border-b border-border-light text-muted-text font-bold text-[11px] uppercase tracking-wider">
-                  <th className="py-3.5 px-4 text-start">المنتج</th>
-                  <th className="py-3.5 px-4 text-start">القسم / الماركة</th>
-                  <th className="py-3.5 px-4 text-start">السعر</th>
-                  <th className="py-3.5 px-4 text-center">المخزون</th>
-                  <th className="py-3.5 px-4 text-center">الفروع</th>
-                  <th className="py-3.5 px-4 text-center">مميز</th>
-                  <th className="py-3.5 px-4 text-center">الحالة</th>
-                  <th className="py-3.5 px-4 text-end">إجراءات</th>
+                  <th className="py-3.5 px-4 text-start whitespace-nowrap">المنتج</th>
+                  <th className="py-3.5 px-4 text-start whitespace-nowrap">القسم / الماركة</th>
+                  <th className="py-3.5 px-4 text-start whitespace-nowrap">السعر</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">المخزون</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">الفروع</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">مميز</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">الحالة</th>
+                  <th className="py-3.5 px-4 text-end whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2EEE8]">
@@ -150,19 +166,19 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Category & Brand */}
-                    <td className="py-3 px-4">
-                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#F2EEE8] text-[#1F1F1F] font-medium text-[11px]">
-                        {p.category || 'غير محدد'}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-[#F2EEE8] text-[#1F1F1F] font-medium text-[11px] whitespace-nowrap">
+                        {CATEGORY_NAMES[p.category || ''] || p.category || 'غير محدد'}
                       </span>
                       {p.brand && (
-                        <span className="block text-[10px] text-muted-text mt-0.5">
+                        <span className="block text-[10px] text-muted-text mt-0.5 whitespace-nowrap">
                           {p.brand}
                         </span>
                       )}
                     </td>
 
                     {/* Price */}
-                    <td className="py-3 px-4 font-bold text-[#1F1F1F]">
+                    <td className="py-3 px-4 font-bold text-[#1F1F1F] whitespace-nowrap">
                       {p.price.toLocaleString('ar-EG')} ج.م
                       {p.compare_at_price && p.compare_at_price > p.price && (
                         <span className="block text-[10px] font-normal text-muted-text line-through">
@@ -172,7 +188,7 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Stock */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
                       <span
                         className={`inline-block px-2 py-0.5 rounded-full font-bold text-[10px] ${
                           p.stock > 5
@@ -187,7 +203,7 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Branches */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
                       <span className="text-[11px] text-[#6B635B]">
                         {p.available_branches === 'mahalla'
                           ? 'المحلة'
@@ -198,7 +214,7 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Featured Toggle */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
                       <button
                         onClick={() => handleToggleFeatured(p.id, p.is_featured)}
                         disabled={isPending}
@@ -214,7 +230,7 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Active Status Toggle */}
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
                       <button
                         onClick={() => handleToggleActive(p.id, p.is_active)}
                         disabled={isPending}
@@ -229,7 +245,7 @@ export function ProductTable({ products }: ProductTableProps) {
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3 px-4 text-end">
+                    <td className="py-3 px-4 text-end whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <Link
                           href={`/admin/products/${p.id}`}

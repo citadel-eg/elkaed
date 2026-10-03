@@ -14,8 +14,8 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   }, [error]);
 
   return (
-    <html lang="ar" dir="rtl">
-      <body className="bg-[#FCFBF8] text-[#1F1F1F] font-sans antialiased m-0 p-0">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <body className="bg-[#FCFBF8] text-[#1F1F1F] font-sans antialiased m-0 p-0" suppressHydrationWarning>
         <div className="min-h-screen w-full flex items-center justify-center px-4 sm:px-8 py-16">
           <div className="max-w-md w-full text-center space-y-6 bg-white border border-border-light rounded-3xl p-8 shadow-sm">
             <div className="w-16 h-16 mx-auto rounded-full bg-[#FBF3E8] border-2 border-gold flex items-center justify-center text-gold">
