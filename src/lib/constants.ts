@@ -1,7 +1,8 @@
-export const STORE_PHONE = '+20 10 63905083';
-export const WHATSAPP_NUMBER = '201063905083';
-export const FACEBOOK_URL = 'https://www.facebook.com/share/18AnoxDv1Y/';
-export const TIKTOK_URL = 'https://vm.tiktok.com/ZS9B8dRMoC7oM-VORFt/';
+export const STORE_PHONE = '01028845155';
+export const WHATSAPP_NUMBER = '201028845155';
+export const FACEBOOK_URL = 'https://www.facebook.com/share/1B1GYYmvsB/?mibextid=wwXIfr';
+export const TIKTOK_URL = 'https://www.tiktok.com/@alqaedmall?_r=1&_t=ZS-9Asqss3x47j';
+export const INSTAGRAM_URL = 'https://www.instagram.com/el_qaed_stores?psln=ZDhldjRpbGg2Mnpi&utm_source=qr';
 export const STORE_NAME = 'القائد للتقنية';
 export const STORE_LOCATION_MAHALLA = 'شارع البحر المحلة';
 export const STORE_LOCATION_SAMANOUD = 'سمنود';

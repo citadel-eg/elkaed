@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { WhatsAppIcon } from "@/components/ui/Icons";
+import { WHATSAPP_NUMBER } from "@/lib/constants";
 import type { Product } from "@/types/product";
 
 interface FeaturedProductsSectionProps {
@@ -10,7 +11,6 @@ interface FeaturedProductsSectionProps {
 export function FeaturedProductsSection({
   products = [],
 }: FeaturedProductsSectionProps) {
-  const WHATSAPP_NUMBER = "201063905083";
 
   // If live backend products exist and have items, map them or fallback to exact figma cards
   const displayItems = products.length > 0 ? products.slice(0, 6) : [];

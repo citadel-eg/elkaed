@@ -105,7 +105,7 @@ const jsonLd = {
   name: 'متجر القائد للتقنية',
   image: `${siteUrl}/images/logo.png`,
   url: siteUrl,
-  telephone: '+201062085731',
+  telephone: '+201028845155',
   priceRange: '$$',
   address: {
     '@type': 'PostalAddress',

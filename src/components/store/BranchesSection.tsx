@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { MapPinIcon, PhoneIcon, ClockIcon, ExternalLinkIcon, WhatsAppIcon } from '@/components/ui/Icons';
+import { STORE_PHONE, WHATSAPP_NUMBER } from '@/lib/constants';
 
 export function BranchesSection() {
   const branches = [
@@ -8,11 +9,11 @@ export function BranchesSection() {
       name: 'فرع المحلة الكبرى',
       city: 'المحله الكبرى',
       address: 'شارع البحر المحلة',
-      phone: '+20 10 63905083',
+      phone: STORE_PHONE,
       hours: 'يوميًا 11ص – 11م',
       image: '/images/hero-store.png',
       mapUrl: 'https://maps.app.goo.gl/Mahalla',
-      whatsappUrl: `https://wa.me/201063905083?text=${encodeURIComponent(
+      whatsappUrl: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
         'مرحبًا، أود التواصل مع فرع المحلة الكبرى.'
       )}`,
     },
@@ -21,11 +22,11 @@ export function BranchesSection() {
       name: 'فرع سمنود',
       city: 'سمنود',
       address: 'سمنود',
-      phone: '+20 10 63905083',
+      phone: STORE_PHONE,
       hours: 'يوميًا 11ص – 11م',
       image: '/images/hero-store.png',
       mapUrl: 'https://maps.app.goo.gl/Samanoud',
-      whatsappUrl: `https://wa.me/201063905083?text=${encodeURIComponent(
+      whatsappUrl: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
         'مرحبًا، أود التواصل مع فرع سمنود.'
       )}`,
     },

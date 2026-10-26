@@ -7,12 +7,14 @@ import {
   WhatsAppIcon,
   FacebookIcon,
   TikTokIcon,
+  InstagramIcon,
 } from '@/components/ui/Icons';
 import {
   STORE_PHONE,
   WHATSAPP_NUMBER,
   FACEBOOK_URL,
   TIKTOK_URL,
+  INSTAGRAM_URL,
   STORE_LOCATION_MAHALLA,
   STORE_LOCATION_SAMANOUD,
   STORE_HOURS,
@@ -72,6 +74,16 @@ export function Footer() {
               </a>
 
               <a
+                href={INSTAGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-gold flex items-center justify-center text-white transition-all hover:scale-105"
+              >
+                <InstagramIcon className="w-4 h-4" />
+              </a>
+
+              <a
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -82,7 +94,7 @@ export function Footer() {
               </a>
 
               <a
-                href={`tel:${WHATSAPP_NUMBER}`}
+                href={`tel:${STORE_PHONE}`}
                 aria-label="Phone"
                 className="w-10 h-10 rounded-full bg-white/10 hover:bg-gold flex items-center justify-center text-white transition-all hover:scale-105"
               >

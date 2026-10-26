@@ -5,11 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { WhatsAppIcon } from "@/components/ui/Icons";
+import { WHATSAPP_NUMBER } from "@/lib/constants";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const WHATSAPP_NUMBER = "201063905083";
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     "مرحبًا القائد، أود الاستفسار عن المنتجات والخدمات.",
   )}`;

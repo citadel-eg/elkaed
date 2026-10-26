@@ -1,7 +1,7 @@
 import { WhatsAppIcon } from '@/components/ui/Icons';
+import { WHATSAPP_NUMBER } from '@/lib/constants';
 
 export function CtaBanner() {
-  const WHATSAPP_NUMBER = '201063905083';
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     'مرحبًا القائد، أود التواصل معكم بخصوص المنتجات والخدمات.'
   )}`;

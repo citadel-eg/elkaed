@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { WhatsAppIcon } from '@/components/ui/Icons';
+import { WHATSAPP_NUMBER } from '@/lib/constants';
 
 export function HeroSection() {
-  const WHATSAPP_NUMBER = '201063905083';
   const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     'مرحبًا القائد، أود التحدث معكم بخصوص المنتجات والخدمات المتاحة.'
   )}`;
