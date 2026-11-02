@@ -79,6 +79,7 @@ async function uploadTeamAvatar(
     .from("team")
     .upload(cleanFileName, buffer, {
       contentType: file.type || "image/png",
+      cacheControl: "31536000",
       upsert: true,
     });
 
@@ -94,7 +95,8 @@ async function uploadTeamAvatar(
         .from("team")
         .upload(cleanFileName, buffer, {
           contentType: file.type || "image/png",
-          upsert: true,
+          cacheControl: "31536000",
+      upsert: true,
         });
       uploadError = retry.error;
     } catch {

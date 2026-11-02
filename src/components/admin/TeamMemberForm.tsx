@@ -60,7 +60,8 @@ export function TeamMemberForm({ member, isEditing = false }: TeamMemberFormProp
           .from('team')
           .upload(cleanFileName, fileToSend, {
             contentType: fileToSend.type || 'image/webp',
-            upsert: true,
+            cacheControl: "31536000",
+      upsert: true,
           });
 
         if (!error && data) {

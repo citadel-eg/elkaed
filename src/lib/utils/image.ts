@@ -40,16 +40,15 @@ export async function compressImage(
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        const outputType = file.type === 'image/png' ? 'image/webp' : 'image/jpeg';
+        const outputType = 'image/webp';
         canvas.toBlob(
           (blob) => {
-            if (!blob || blob.size >= file.size) {
+            if (!blob || (blob.size >= file.size && file.type === 'image/webp')) {
               resolve(file);
               return;
             }
             const cleanBase = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-            const ext = outputType === 'image/webp' ? '.webp' : '.jpg';
-            const compressedFile = new File([blob], `${cleanBase}${ext}`, {
+            const compressedFile = new File([blob], `${cleanBase}.webp`, {
               type: outputType,
             });
             resolve(compressedFile);

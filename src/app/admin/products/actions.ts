@@ -60,6 +60,7 @@ async function uploadProductFile(
     .from("products")
     .upload(cleanFileName, buffer, {
       contentType: file.type || "image/jpeg",
+      cacheControl: "31536000",
       upsert: true,
     });
 
@@ -75,7 +76,8 @@ async function uploadProductFile(
         .from("products")
         .upload(cleanFileName, buffer, {
           contentType: file.type || "image/jpeg",
-          upsert: true,
+          cacheControl: "31536000",
+      upsert: true,
         });
       uploadError = retry.error;
     } catch {
