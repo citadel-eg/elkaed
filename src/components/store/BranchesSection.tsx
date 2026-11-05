@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { MapPinIcon, PhoneIcon, ClockIcon, ExternalLinkIcon, WhatsAppIcon } from '@/components/ui/Icons';
 import { STORE_PHONE, WHATSAPP_NUMBER } from '@/lib/constants';
 

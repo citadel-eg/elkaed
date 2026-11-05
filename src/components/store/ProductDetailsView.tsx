@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { WhatsAppIcon } from '@/components/ui/Icons';
 import { WHATSAPP_NUMBER } from '@/lib/constants';
+import { getCachedImageUrl } from '@/lib/utils/image';
 import type { Product } from '@/types/product';
 
 interface ProductDetailsViewProps {
@@ -19,9 +20,9 @@ export function ProductDetailsView({
   relatedProducts,
 }: ProductDetailsViewProps) {
   // Gallery images from DB
-  const mainImage = product.image_url || '/images/product-placeholder.svg';
+  const mainImage = getCachedImageUrl(product.image_url, '/images/product-placeholder.svg');
   const galleryImages = (product.gallery_images && Array.isArray(product.gallery_images) && product.gallery_images.length > 0)
-    ? product.gallery_images
+    ? product.gallery_images.map((img) => getCachedImageUrl(img, '/images/product-placeholder.svg'))
     : [mainImage];
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
 
@@ -53,11 +54,11 @@ export function ProductDetailsView({
       <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-16 py-10 sm:py-14 space-y-16 lg:space-y-20">
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center gap-2 text-xs sm:text-[13px] text-muted-text font-alexandria">
-          <Link href="/" className="hover:text-gold transition-colors">
+          <Link href="/" prefetch={false} className="hover:text-gold transition-colors">
             الرئيسية
           </Link>
           <span>/</span>
-          <Link href="/products" className="hover:text-gold transition-colors">
+          <Link href="/products" prefetch={false} className="hover:text-gold transition-colors">
             المنتجات
           </Link>
           <span>/</span>
@@ -152,6 +153,50 @@ export function ProductDetailsView({
                 sizes="(max-width: 1024px) 100vw, 520px"
                 className="object-contain p-4 transition-transform duration-500 group-hover:scale-105"
               />
+
+              {galleryImages.length > 1 && (
+                <>
+                  {/* Previous Image Button (Right side in RTL) */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedImageIdx((prev) =>
+                        prev === 0 ? galleryImages.length - 1 : prev - 1
+                      )
+                    }
+                    aria-label="الصورة السابقة"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 hover:bg-gold text-[#1F1F1F] hover:text-white border border-[#E2D9CD] hover:border-gold shadow-md flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Next Image Button (Left side in RTL) */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedImageIdx((prev) =>
+                        prev === galleryImages.length - 1 ? 0 : prev + 1
+                      )
+                    }
+                    aria-label="الصورة التالية"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 hover:bg-gold text-[#1F1F1F] hover:text-white border border-[#E2D9CD] hover:border-gold shadow-md flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Image Counter Pill */}
+                  <div
+                    dir="ltr"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-black/50 backdrop-blur-xs text-white font-alexandria text-[11px] font-bold tracking-wider select-none"
+                  >
+                    {selectedImageIdx + 1} / {galleryImages.length}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Thumbnails Row (Rendered only if > 1 image in DB) */}
@@ -171,6 +216,7 @@ export function ProductDetailsView({
                       src={img}
                       alt={`${product.name} - ${idx + 1}`}
                       fill
+                      loading="lazy"
                       sizes="80px"
                       className="object-contain p-2"
                     />
@@ -181,11 +227,11 @@ export function ProductDetailsView({
           </div>
         </div>
 
-        {/* 2. Highlights & Specifications (Exact Figma Node 22:13 - Specs on Right, Highlights on Left in RTL) */}
+        {/* 2. Highlights & Specifications */}
         {(hasHighlights || hasSpecs) && (
           <div className="pt-10 border-t border-border-light">
             <div className={`grid grid-cols-1 ${hasHighlights && hasSpecs ? 'lg:grid-cols-2' : ''} gap-12 lg:gap-20 items-start`}>
-              {/* 1. Specifications Table (المواصفات - Right Side in RTL) */}
+              {/* 1. Specifications Table */}
               {hasSpecs && (
                 <div className="space-y-6 text-start">
                   <h2 className="font-marhey font-normal text-[28px] sm:text-[30px] text-[#1F1F1F]">
@@ -206,7 +252,7 @@ export function ProductDetailsView({
                 </div>
               )}
 
-              {/* 2. Highlights (أبرز المميزات - Left Side in RTL) */}
+              {/* 2. Highlights */}
               {hasHighlights && (
                 <div className="space-y-6 text-start">
                   <h2 className="font-marhey font-normal text-[28px] sm:text-[30px] text-[#1F1F1F]">
@@ -228,7 +274,7 @@ export function ProductDetailsView({
           </div>
         )}
 
-        {/* 3. Recommended Accessories (Exact Figma Node 22:103) */}
+        {/* 3. Recommended Accessories */}
         {suggestedAccessories.length > 0 && (
           <div className="space-y-8 pt-10 border-t border-border-light">
             <div className="text-start">
@@ -250,12 +296,14 @@ export function ProductDetailsView({
                   >
                     <Link
                       href={`/products/${item.id}`}
+                      prefetch={false}
                       className="block relative h-64 sm:h-72 w-full overflow-hidden bg-transparent"
                     >
                       <Image
-                        src={item.image_url || '/images/product-placeholder.svg'}
+                        src={getCachedImageUrl(item.image_url, '/images/product-placeholder.svg')}
                         alt={item.name}
                         fill
+                        loading="lazy"
                         sizes="(max-width: 768px) 100vw, 33vw"
                         className="object-contain p-4 group-hover:scale-105 transition-transform duration-500"
                       />
@@ -266,7 +314,7 @@ export function ProductDetailsView({
                         <p className="font-alexandria font-bold text-[10px] tracking-[1.5px] text-[#A78463] uppercase">
                           {item.brand || item.category || 'القائد'}
                         </p>
-                        <Link href={`/products/${item.id}`}>
+                        <Link href={`/products/${item.id}`} prefetch={false}>
                           <h3 className="font-alexandria font-bold text-[18px] text-[#1F1F1F] group-hover:text-gold transition-colors line-clamp-1">
                             {item.name}
                           </h3>
@@ -299,6 +347,7 @@ export function ProductDetailsView({
 
                         <Link
                           href={`/products/${item.id}`}
+                          prefetch={false}
                           className="h-10 px-4 inline-flex items-center justify-center rounded-[20px] border border-[#DCD4CA] hover:border-[#1F1F1F] text-[#1F1F1F] text-[13px] font-alexandria font-bold transition-colors whitespace-nowrap shrink-0"
                         >
                           التفاصيل
@@ -312,7 +361,7 @@ export function ProductDetailsView({
           </div>
         )}
 
-        {/* 4. Related Products (Exact Figma Node 22:163) */}
+        {/* 4. Related Products */}
         {relatedProducts.length > 0 && (
           <div className="space-y-8 pt-10 border-t border-border-light">
             <div className="text-start">
@@ -334,12 +383,14 @@ export function ProductDetailsView({
                   >
                     <Link
                       href={`/products/${item.id}`}
+                      prefetch={false}
                       className="block relative h-64 sm:h-72 w-full overflow-hidden bg-transparent"
                     >
                       <Image
-                        src={item.image_url || '/images/product-placeholder.svg'}
+                        src={getCachedImageUrl(item.image_url, '/images/product-placeholder.svg')}
                         alt={item.name}
                         fill
+                        loading="lazy"
                         sizes="(max-width: 768px) 100vw, 33vw"
                         className="object-contain p-4 group-hover:scale-105 transition-transform duration-500"
                       />
@@ -350,7 +401,7 @@ export function ProductDetailsView({
                         <p className="font-alexandria font-bold text-[10px] tracking-[1.5px] text-[#A78463] uppercase">
                           {item.brand || item.category || 'القائد'}
                         </p>
-                        <Link href={`/products/${item.id}`}>
+                        <Link href={`/products/${item.id}`} prefetch={false}>
                           <h3 className="font-alexandria font-bold text-[18px] text-[#1F1F1F] group-hover:text-gold transition-colors line-clamp-1">
                             {item.name}
                           </h3>
@@ -383,6 +434,7 @@ export function ProductDetailsView({
 
                         <Link
                           href={`/products/${item.id}`}
+                          prefetch={false}
                           className="h-10 px-4 inline-flex items-center justify-center rounded-[20px] border border-[#DCD4CA] hover:border-[#1F1F1F] text-[#1F1F1F] text-[13px] font-alexandria font-bold transition-colors whitespace-nowrap shrink-0"
                         >
                           التفاصيل

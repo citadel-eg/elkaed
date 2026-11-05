@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { createClient } from '@/lib/supabase/server';
 import { WhatsAppIcon } from '@/components/ui/Icons';
 import { CtaBanner } from '@/components/store/CtaBanner';
@@ -11,7 +11,9 @@ export const metadata = {
   description: 'اكتشف تشكيلة متجر القائد — الهواتف الذكية، اللابتوبات، الإكسسوارات، الشواحن، والباور بانك.',
 };
 
-export const revalidate = 0;
+export const revalidate = 60;
+
+const PAGE_SIZE = 12;
 
 interface StoreProductsPageProps {
   searchParams: Promise<{
@@ -21,6 +23,7 @@ interface StoreProductsPageProps {
     sort?: string;
     inStock?: string;
     offers?: string;
+    page?: string;
   }>;
 }
 
@@ -32,7 +35,12 @@ export default async function StoreProductsPage({ searchParams }: StoreProductsP
     sort = 'featured',
     inStock = 'false',
     offers = 'false',
+    page = '1',
   } = await searchParams;
+
+  const currentPage = Math.max(1, parseInt(page, 10) || 1);
+  const from = (currentPage - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
 
@@ -50,8 +58,11 @@ export default async function StoreProductsPage({ searchParams }: StoreProductsP
     new Set((allBrandsData || []).map((p) => p.brand).filter(Boolean))
   ) as string[];
 
-  // 2. Build Supabase query with all filters
-  let query = supabase.from('products').select('*', { count: 'exact' }).eq('is_active', true);
+  // 2. Build Supabase query with lightweight columns & pagination
+  let query = supabase
+    .from('products')
+    .select('id, name, slug, description, price, compare_at_price, category, brand, image_url, stock, is_featured, is_active, created_at', { count: 'exact' })
+    .eq('is_active', true);
 
   if (category && category !== 'all') {
     query = query.eq('category', category);
@@ -88,14 +99,15 @@ export default async function StoreProductsPage({ searchParams }: StoreProductsP
       .order('created_at', { ascending: false });
   }
 
-  const { data: products, count, error } = await query;
+  const { data: products, count, error } = await query.range(from, to);
 
   if (error) {
     console.error('Error querying products from Supabase:', error.message || error);
   }
 
-  const productList: Product[] = products || [];
+  const productList: Product[] = (products as Product[]) || [];
   const totalCount = count ?? productList.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="w-full bg-[#FCFBF8]">
@@ -163,6 +175,8 @@ export default async function StoreProductsPage({ searchParams }: StoreProductsP
       <ProductsCatalog
         products={productList}
         totalCount={totalCount}
+        currentPage={currentPage}
+        totalPages={totalPages}
         availableBrands={availableBrands}
         currentCategory={category}
         currentBrand={brand}

@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import type { TeamMember } from '@/types/team';
+import { getCachedImageUrl } from '@/lib/utils/image';
 import { toggleTeamMemberActive, deleteTeamMember } from '@/app/admin/team/actions';
 
 interface TeamTableProps {
@@ -93,7 +94,8 @@ export function TeamTable({ members }: TeamTableProps) {
                       <div className="flex items-center gap-3">
                         <div className="relative w-11 h-11 rounded-xl bg-[#F2EEE8] border border-[#DCD4CA] overflow-hidden shrink-0">
                           <Image
-                            src={m.image_url || '/images/avatar-placeholder.svg'}
+                            src={getCachedImageUrl(m.image_url, '/images/avatar-placeholder.svg')}
+                            loading="lazy"
                             alt={m.name}
                             fill
                             sizes="44px"

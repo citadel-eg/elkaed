@@ -3,16 +3,19 @@
 import { useTransition, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { WhatsAppIcon } from '@/components/ui/Icons';
 import { ProductsGridSkeleton } from '@/components/ui/ProductCardSkeleton';
 import { WHATSAPP_NUMBER, getWhatsAppUrl } from '@/lib/constants';
+import { getCachedImageUrl } from '@/lib/utils/image';
 import type { Product } from '@/types/product';
 
 interface ProductsCatalogProps {
   products?: Product[];
   initialProducts?: Product[];
   totalCount?: number;
+  currentPage?: number;
+  totalPages?: number;
   availableBrands?: string[];
   currentCategory?: string;
   initialCategory?: string;
@@ -44,6 +47,8 @@ export function ProductsCatalog({
   products = [],
   initialProducts = [],
   totalCount,
+  currentPage = 1,
+  totalPages = 1,
   availableBrands = [],
   currentCategory,
   initialCategory = 'all',
@@ -67,18 +72,21 @@ export function ProductsCatalog({
   const [prevSearch, setPrevSearch] = useState(currentSearch);
   const isInitialMount = useRef(true);
 
-  // Sync search input if currentSearch prop changes (React recommended pattern without useEffect)
   if (prevSearch !== currentSearch) {
     setPrevSearch(currentSearch);
     setSearchInput(currentSearch);
   }
 
-  const updateFilters = useCallback((updates: Record<string, string | null>) => {
+  const updateFilters = useCallback((updates: Record<string, string | null>, resetPage = true) => {
     const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+
+    if (resetPage && !('page' in updates)) {
+      params.delete('page');
+    }
 
     if (updates && typeof updates === 'object') {
       Object.entries(updates).forEach(([key, value]) => {
-        if (value === null || value === '' || value === 'all' || value === 'false') {
+        if (value === null || value === '' || value === 'all' || value === 'false' || (key === 'page' && value === '1')) {
           params.delete(key);
         } else {
           params.set(key, value);
@@ -120,6 +128,14 @@ export function ProductsCatalog({
     startTransition(() => {
       router.push(pathname, { scroll: false });
     });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
+    updateFilters({ page: String(newPage) }, false);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 380, behavior: 'smooth' });
+    }
   };
 
   const activeFiltersCount = [
@@ -170,7 +186,7 @@ export function ProductsCatalog({
             mobileFiltersOpen ? 'block' : 'hidden'
           } lg:block w-full lg:w-72 shrink-0 space-y-6 text-start transition-all`}
         >
-          {/* Category Filter Group (Exact Node 18:3253) */}
+          {/* Category Filter Group */}
           <div className="space-y-2">
             <h3 className="font-alexandria font-bold text-[14px] text-gold-dark">
               القسم
@@ -195,7 +211,7 @@ export function ProductsCatalog({
             </div>
           </div>
 
-          {/* Brand Filter Group (Exact Node 18:3262) */}
+          {/* Brand Filter Group */}
           <div className="space-y-2">
             <h3 className="font-alexandria font-bold text-[14px] text-gold-dark">
               العلامة
@@ -221,7 +237,7 @@ export function ProductsCatalog({
             </div>
           </div>
 
-          {/* Options Checkboxes (Exact Node 18:3271) */}
+          {/* Options Checkboxes */}
           <div className="space-y-3 pt-1">
             <h3 className="font-alexandria font-bold text-[14px] text-gold-dark">
               خيارات
@@ -259,7 +275,7 @@ export function ProductsCatalog({
             إعادة ضبط الفلاتر
           </button>
 
-          {/* WhatsApp Custom Inquiry Box (Exact Figma Node 18:3289) */}
+          {/* WhatsApp Custom Inquiry Box */}
           <div className="bg-[#1F1F1F] rounded-3xl p-6 text-white text-start space-y-4 shadow-xl">
             <div className="space-y-2">
               <h4 className="font-alexandria font-bold text-[14px] text-white">
@@ -284,10 +300,10 @@ export function ProductsCatalog({
 
         {/* 2. Main Content Area (Products Grid & Top Controls) */}
         <div className="flex-1 w-full space-y-8">
-          {/* Top Bar Controls (Exact Figma Node 19:3812) */}
+          {/* Top Bar Controls */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-8 lg:gap-13 w-full">
-              {/* Search Pill Input (Exact Node 19:3787) */}
+              {/* Search Pill Input */}
               <form
                 onSubmit={handleSearchSubmit}
                 className="flex-1 w-full bg-white border border-[#E2D9CD] h-12 px-4 rounded-full flex items-center gap-3 shadow-xs hover:border-gold focus-within:border-gold transition-colors"
@@ -315,7 +331,7 @@ export function ProductsCatalog({
                 </button>
               </form>
 
-              {/* Sort Dropdown Block (Exact Node 19:3802) */}
+              {/* Sort Dropdown Block */}
               <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
                 <span className="font-alexandria font-normal text-[14px] text-muted-text whitespace-nowrap">
                   ترتيب:
@@ -343,7 +359,7 @@ export function ProductsCatalog({
             {/* Products Count Indicator */}
             <div className="flex items-center justify-between text-start pt-1">
               <span className="font-alexandria font-normal text-[14px] text-muted-text">
-                {effectiveTotalCount} منتج
+                {effectiveTotalCount} منتج {totalPages > 1 ? `— صفحة ${currentPage} من ${totalPages}` : ''}
               </span>
             </div>
           </div>
@@ -367,83 +383,124 @@ export function ProductsCatalog({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {effectiveProducts.map((product) => {
-                const productWhatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-                  `مرحبًا القائد، أود الاستفسار عن تفاصيل وسعر: ${product.name}`
-                )}`;
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+                {effectiveProducts.map((product) => {
+                  const productWhatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+                    `مرحبًا القائد، أود الاستفسار عن تفاصيل وسعر: ${product.name}`
+                  )}`;
 
-                return (
-                  <div
-                    key={product.id}
-                    className="group bg-[#F2EEE8] rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-                  >
-                    {/* Product Image */}
-                    <Link
-                      href={`/products/${product.id}`}
-                      className="block relative h-72 w-full overflow-hidden bg-transparent"
+                  return (
+                    <div
+                      key={product.id}
+                      className="group bg-[#F2EEE8] rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
                     >
-                      <Image
-                        src={product.image_url || '/images/product-placeholder.svg'}
-                        alt={product.name}
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        className="object-contain p-4 group-hover:scale-105 transition-transform duration-500"
-                      />
-                    </Link>
+                      {/* Product Image */}
+                      <Link
+                        href={`/products/${product.id}`}
+                        prefetch={false}
+                        className="block relative h-72 w-full overflow-hidden bg-transparent"
+                      >
+                        <Image
+                          src={getCachedImageUrl(product.image_url, '/images/product-placeholder.svg')}
+                          alt={product.name}
+                          fill
+                          loading="lazy"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </Link>
 
-                    {/* Product Details */}
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3 text-start">
-                      <div className="space-y-1">
-                        <p className="font-alexandria font-bold text-[10px] tracking-[1.5px] text-[#A78463] uppercase">
-                          {product.brand || product.category || 'القائد'}
-                        </p>
-                        <Link href={`/products/${product.id}`}>
-                          <h3 className="font-alexandria font-bold text-[18px] text-[#1F1F1F] group-hover:text-gold transition-colors line-clamp-1">
-                            {product.name}
-                          </h3>
-                        </Link>
-                        <p className="font-alexandria font-normal text-[14px] text-muted-text line-clamp-2 leading-6">
-                          {product.description ||
-                            'أحدث التقنيات والمواصفات المعتمدة بأفضل الأسعار.'}
-                        </p>
-                      </div>
+                      {/* Product Details */}
+                      <div className="p-4 flex-1 flex flex-col justify-between space-y-3 text-start">
+                        <div className="space-y-1">
+                          <p className="font-alexandria font-bold text-[10px] tracking-[1.5px] text-[#A78463] uppercase">
+                            {product.brand || product.category || 'القائد'}
+                          </p>
+                          <Link href={`/products/${product.id}`} prefetch={false}>
+                            <h3 className="font-alexandria font-bold text-[18px] text-[#1F1F1F] group-hover:text-gold transition-colors line-clamp-1">
+                              {product.name}
+                            </h3>
+                          </Link>
+                          <p className="font-alexandria font-normal text-[14px] text-muted-text line-clamp-2 leading-6">
+                            {product.description ||
+                              'أحدث التقنيات والمواصفات المعتمدة بأفضل الأسعار.'}
+                          </p>
+                        </div>
 
-                      {/* Stock & Price */}
-                      <div className="flex items-center justify-between pt-2">
-                        <span className="font-marhey font-semibold text-[24px] text-[#1F1F1F]">
-                          {product.price.toLocaleString('ar-EG')} ج.م
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[12px] font-alexandria font-normal text-[#6B635B]">
-                          <span className="w-2 h-2 rounded-full bg-[#4B8B5A]" />
-                          <span>متوفر</span>
+                        {/* Stock & Price */}
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="font-marhey font-semibold text-[24px] text-[#1F1F1F]">
+                            {product.price.toLocaleString('ar-EG')} ج.م
+                          </span>
+                          <div className="flex items-center gap-1.5 text-[12px] font-alexandria font-normal text-[#6B635B]">
+                            <span className="w-2 h-2 rounded-full bg-[#4B8B5A]" />
+                            <span>متوفر</span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 pt-2">
+                          <a
+                            href={productWhatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-[20px] bg-gold hover:bg-gold-hover text-white text-[13px] font-alexandria font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            <span className="whitespace-nowrap">اطلب</span>
+                            <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
+                          </a>
+
+                          <Link
+                            href={`/products/${product.id}`}
+                            prefetch={false}
+                            className="h-10 px-4 inline-flex items-center justify-center rounded-[20px] border border-[#DCD4CA] hover:border-[#1F1F1F] text-[#1F1F1F] text-[13px] font-alexandria font-bold transition-colors whitespace-nowrap shrink-0"
+                          >
+                            التفاصيل
+                          </Link>
                         </div>
                       </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-2 pt-2">
-                        <a
-                          href={productWhatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-[20px] bg-gold hover:bg-gold-hover text-white text-[13px] font-alexandria font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap shrink-0"
-                        >
-                          <span className="whitespace-nowrap">اطلب</span>
-                          <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
-                        </a>
-
-                        <Link
-                          href={`/products/${product.id}`}
-                          className="h-10 px-4 inline-flex items-center justify-center rounded-[20px] border border-[#DCD4CA] hover:border-[#1F1F1F] text-[#1F1F1F] text-[13px] font-alexandria font-bold transition-colors whitespace-nowrap shrink-0"
-                        >
-                          التفاصيل
-                        </Link>
-                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-6">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1 || isPending}
+                    className="h-10 px-4 rounded-xl border border-[#E2D9CD] bg-white text-[#1F1F1F] font-alexandria font-bold text-xs hover:border-gold disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                  >
+                    السابق
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handlePageChange(p)}
+                      disabled={isPending}
+                      className={`w-10 h-10 rounded-xl font-alexandria font-bold text-xs transition-all cursor-pointer ${
+                        p === currentPage
+                          ? 'bg-gold text-white shadow-sm'
+                          : 'bg-white border border-[#E2D9CD] text-[#1F1F1F] hover:border-gold'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= totalPages || isPending}
+                    className="h-10 px-4 rounded-xl border border-[#E2D9CD] bg-white text-[#1F1F1F] font-alexandria font-bold text-xs hover:border-gold disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                  >
+                    التالي
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

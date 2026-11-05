@@ -1,7 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/ui/AppImage";
 import { WhatsAppIcon } from "@/components/ui/Icons";
 import { WHATSAPP_NUMBER } from "@/lib/constants";
+import { getCachedImageUrl } from "@/lib/utils/image";
 import type { Product } from "@/types/product";
 
 interface FeaturedProductsSectionProps {
@@ -35,6 +36,7 @@ export function FeaturedProductsSection({
         {/* Link (RTL End) */}
         <Link
           href="/products"
+          prefetch={false}
           className="inline-flex items-center gap-1.5 border-b-2 border-gold pb-1 font-alexandria font-bold text-[14px] sm:text-[16px] text-gold hover:text-gold-hover hover:border-gold-hover transition-all group"
         >
           <span>عرض الكل</span>
@@ -57,7 +59,7 @@ export function FeaturedProductsSection({
             typeof item.price === "number"
               ? `${item.price.toLocaleString("ar-EG")} ج.م`
               : item.price || "1.390 ج.م";
-          const itemImg = item.image_url || "/images/product-placeholder.svg";
+          const itemImg = getCachedImageUrl(item.image_url, "/images/product-placeholder.svg");
           const itemId = item.id || "iphone-16-pro";
 
           const askPriceWhatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
@@ -72,12 +74,14 @@ export function FeaturedProductsSection({
               {/* Product Image Area */}
               <Link
                 href={`/products/${itemId}`}
+                prefetch={false}
                 className="block relative h-72 w-full overflow-hidden bg-transparent"
               >
                 <Image
                   src={itemImg}
                   alt={itemName}
                   fill
+                  loading="lazy"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   className="object-contain p-4 group-hover:scale-105 transition-transform duration-500"
                 />
@@ -89,7 +93,7 @@ export function FeaturedProductsSection({
                   <p className="font-alexandria font-bold text-[10px] tracking-[1.5px] text-[#A78463] uppercase">
                     {itemBrand}
                   </p>
-                  <Link href={`/products/${itemId}`} className="block">
+                  <Link href={`/products/${itemId}`} prefetch={false} className="block">
                     <h3 className="font-alexandria font-bold text-[18px] text-[#1F1F1F] leading-7 group-hover:text-gold transition-colors line-clamp-1">
                       {itemName}
                     </h3>
@@ -126,6 +130,7 @@ export function FeaturedProductsSection({
 
                   <Link
                     href={`/products/${itemId}`}
+                    prefetch={false}
                     className="px-4 py-3 rounded-[20px] border border-[#DCD4CA] hover:border-[#1F1F1F] text-[#1F1F1F] font-alexandria font-bold text-[13px] transition-colors text-center whitespace-nowrap shrink-0"
                   >
                     التفاصيل

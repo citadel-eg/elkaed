@@ -1,7 +1,8 @@
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { WhatsAppIcon } from '@/components/ui/Icons';
 import { CtaBanner } from '@/components/store/CtaBanner';
 import { getWhatsAppUrl } from '@/lib/constants';
+import { getCachedImageUrl } from '@/lib/utils/image';
 import { createClient } from '@/lib/supabase/server';
 import type { TeamMember } from '@/types/team';
 
@@ -310,7 +311,8 @@ export default async function AboutPage() {
               >
                 <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F2EEE8]">
                   <Image
-                    src={member.image_url || '/images/avatar-placeholder.svg'}
+                    src={getCachedImageUrl(member.image_url, '/images/avatar-placeholder.svg')}
+                    loading="lazy"
                     alt={member.name}
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 33vw, 20vw"

@@ -2,13 +2,16 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import type { Product } from '@/types/product';
+import { getCachedImageUrl } from '@/lib/utils/image';
 import { toggleProductActive, toggleProductFeatured, deleteProduct } from '@/app/admin/products/actions';
 
 interface ProductTableProps {
   products: Product[];
 }
+
+const PAGE_SIZE = 15;
 
 const CATEGORY_NAMES: Record<string, string> = {
   smartphones: 'الهواتف الذكية',
@@ -29,6 +32,7 @@ const CATEGORY_NAMES: Record<string, string> = {
 export function ProductTable({ products }: ProductTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -47,6 +51,23 @@ export function ProductTable({ products }: ProductTableProps) {
 
     return matchesSearch && matchesCategory;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedProducts = filteredProducts.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE
+  );
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryFilter(value);
+    setCurrentPage(1);
+  };
 
   const handleToggleActive = (id: string, current: boolean) => {
     startTransition(async () => {
@@ -75,7 +96,7 @@ export function ProductTable({ products }: ProductTableProps) {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="بحث بالاسم أو الماركة..."
             className="w-full h-10 pr-9 pl-4 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] placeholder-muted-text focus:outline-none focus:border-gold transition-colors"
           />
@@ -94,10 +115,13 @@ export function ProductTable({ products }: ProductTableProps) {
           </svg>
         </div>
 
-        <div className="w-full sm:w-auto flex items-center gap-3">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3">
+          <span className="font-alexandria text-xs text-muted-text">
+            عرض {paginatedProducts.length} من {filteredProducts.length}
+          </span>
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => handleCategoryChange(e.target.value)}
             className="h-10 px-3 bg-[#FCFBF8] border border-[#DCD4CA] rounded-xl font-alexandria text-xs text-[#1F1F1F] focus:outline-none focus:border-gold transition-colors cursor-pointer"
           >
             <option value="all">كافة الأقسام ({products.length})</option>
@@ -137,16 +161,17 @@ export function ProductTable({ products }: ProductTableProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2EEE8]">
-                {filteredProducts.map((p) => (
+                {paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-[#FCFBF8] transition-colors">
                     {/* Image & Name */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="relative w-11 h-11 rounded-xl bg-gold-light border border-border-light overflow-hidden shrink-0">
                           <Image
-                            src={p.image_url || '/images/product-placeholder.svg'}
+                            src={getCachedImageUrl(p.image_url, '/images/product-placeholder.svg')}
                             alt={p.name}
                             fill
+                            loading="lazy"
                             sizes="44px"
                             className="object-contain p-1"
                           />
@@ -154,6 +179,7 @@ export function ProductTable({ products }: ProductTableProps) {
                         <div className="space-y-0.5">
                           <Link
                             href={`/admin/products/${p.id}`}
+                            prefetch={false}
                             className="font-bold text-xs text-[#1F1F1F] hover:text-gold transition-colors line-clamp-1"
                           >
                             {p.name}
@@ -249,6 +275,7 @@ export function ProductTable({ products }: ProductTableProps) {
                       <div className="flex items-center justify-end gap-1.5">
                         <Link
                           href={`/admin/products/${p.id}`}
+                          prefetch={false}
                           className="p-1.5 rounded-lg bg-[#F2EEE8] hover:bg-gold-tint text-[#1F1F1F] transition-colors"
                           title="تعديل المنتج"
                         >
@@ -282,6 +309,44 @@ export function ProductTable({ products }: ProductTableProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Admin Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="bg-[#F8F5F0] border-t border-border-light px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span className="font-alexandria text-xs text-muted-text">
+              صفحة {safePage} من {totalPages} ({filteredProducts.length} منتج)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="h-8 px-3 rounded-lg bg-white border border-[#DCD4CA] text-[#1F1F1F] font-alexandria font-bold text-xs hover:border-gold disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              >
+                السابق
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-8 h-8 rounded-lg font-alexandria font-bold text-xs transition-all cursor-pointer ${
+                    pageNum === safePage
+                      ? 'bg-gold text-white shadow-xs'
+                      : 'bg-white border border-[#DCD4CA] text-[#1F1F1F] hover:border-gold'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="h-8 px-3 rounded-lg bg-white border border-[#DCD4CA] text-[#1F1F1F] font-alexandria font-bold text-xs hover:border-gold disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              >
+                التالي
+              </button>
+            </div>
           </div>
         )}
       </div>

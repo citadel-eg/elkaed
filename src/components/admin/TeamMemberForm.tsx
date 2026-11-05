@@ -2,7 +2,7 @@
 
 import { useActionState, useState, startTransition } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { createTeamMember, updateTeamMember, type ActionState } from '@/app/admin/team/actions';
 import type { TeamMember } from '@/types/team';
 import { compressImage } from '@/lib/utils/image';

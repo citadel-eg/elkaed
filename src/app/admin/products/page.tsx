@@ -14,14 +14,14 @@ export default async function AdminProductsPage() {
 
   const { data: products, error } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, slug, price, compare_at_price, category, brand, image_url, stock, available_branches, is_featured, is_active, created_at')
     .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Failed to fetch admin products:', error.message || error);
   }
 
-  const productList: Product[] = products || [];
+  const productList: Product[] = (products as Product[]) || [];
 
   return (
     <div className="space-y-6 text-start" dir="rtl">

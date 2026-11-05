@@ -1,6 +1,6 @@
 import { getAdminSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
-import Image from 'next/image';
+import Image from '@/components/ui/AppImage';
 import { LoginForm } from './LoginForm';
 
 interface LoginPageProps {
@@ -20,7 +20,7 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <div className="h-svh w-full overflow-hidden flex items-center justify-center bg-[#FCFBF8] p-4" dir="rtl">
+    <div className="h-dvh max-h-dvh w-full overflow-hidden flex items-center justify-center bg-[#FCFBF8] p-4" dir="rtl">
       <div className="w-full max-w-md bg-white border border-border-light rounded-3xl p-8 sm:p-10 shadow-sm space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-3">
